@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Netplan Config Creator</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+  <style>
+    html, body {
+      height: 100%;
+    }
+    body {
+      background-color: #1e1e2f;
+      color: #e0e0e0;
+      font-family: monospace;
+      margin: 0;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+    h1 {
+      text-align: center;
+      color: #4fd1c5;
+    }
+    .layout {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    
+    .editor-section {
+      flex: 1;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      max-height: 80vh; /* Add this line */
+      overflow: hidden;  /* Prevent overflow from expanding the layout */
+    }
+
+    .editor-section, .modules-section {
+      flex: 1;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+    .CodeMirror {
+      flex: 1;
+      height: 100%;
+      overflow: auto;
+    }
+    .CodeMirror-scroll {
+      overflow-y: auto !important;
+    }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    select, button {
+      padding: 0.5rem 1rem;
+      font-family: monospace;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      background-color: #2d3748;
+      color: #e0e0e0;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #4a5568;
+    }
+    .error {
+      color: #ff6b6b;
+      background: #2c1e1e;
+      padding: 0.75rem;
+      border: 1px solid #ff6b6b;
+      margin-top: 1rem;
+      border-radius: 6px;
+    }
+    .success {
+      color: #38c172;
+      background: #1e2e1e;
+      padding: 0.75rem;
+      border: 1px solid #38c172;
+      margin-top: 1rem;
+      border-radius: 6px;
+    }
+    .module-button {
+      display: block;
+      width: 100%;
+      margin-bottom: 0.5rem;
+      background-color: #394867;
+    }
+    .module-button.active {
+      background-color: #2b6cb0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🛠️ Netplan Config Creator</h1>
+
+<div class="controls">
+  <select id="templateSelector">
+    <option value="full">Full Showcase</option>
+    <option value="simple">Simple Showcase</option>
+  </select>
+  <button onclick="validateYaml()">Validate</button>
+  <button onclick="copyToClipboard()">Copy</button>
+  <button onclick="downloadYaml()">Download</button>
+</div>
+
+<div class="layout">
+  <div class="editor-section">
+    <textarea id="yamlEditor"></textarea>
+    <div id="errorBox" class="error" style="display: none;"></div>
+    <div id="successBox" class="success" style="display: none;">✔ No problems found.</div>
+  </div>
+  <div class="modules-section">
+    <h3>📦 Netplan Modules</h3>
+    <button class="module-button active" data-type="ethernets" onclick="toggleModule(this)">Ethernets</button>
+    <button class="module-button active" data-type="wifis" onclick="toggleModule(this)">Wi-Fi</button>
+    <button class="module-button active" data-type="bridges" onclick="toggleModule(this)">Bridge</button>
+    <button class="module-button active" data-type="vlans" onclick="toggleModule(this)">VLAN</button>
+    <button class="module-button active" data-type="bonds" onclick="toggleModule(this)">Bond</button>
+    <button class="module-button active" data-type="tunnels" onclick="toggleModule(this)">Tunnels</button>
+    <button class="module-button active" data-type="macvlans" onclick="toggleModule(this)">MACVLAN</button>
+    <button class="module-button active" data-type="veth" onclick="toggleModule(this)">Veth</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/yaml/yaml.min.js"></script>
+
+<script>
+  const baseTemplate = `# Netplan configuration file
+# This file defines network interfaces using Netplan.
+# Steps to apply:
+# 1. Run 'sudo netplan generate' to convert to backend configs.
+# 2. Run 'sudo netplan try' to test it interactively (auto rollback if it fails).
+# 3. If it works, run 'sudo netplan apply' to make it permanent.
+network:
+  version: 2
+  renderer: networkd
+`;
+
+ const snippetsFull = {
+  ethernets: `  # Static Ethernet interface
+  ethernets:
+    eth0:
+      match:
+        macaddress: "00:11:22:33:44:55"  # Ensures correct device
+      set-name: lan0                     # Renames device for clarity
+      mtu: 1500                          # Optional: set MTU
+      dhcp4: no
+      addresses: [192.168.1.10/24]
+      gateway4: 192.168.1.1
+      nameservers:
+        addresses: [8.8.8.8, 8.8.4.4]
+        search: [example.local]
+      # dhcp6: no
+      # optional: true
+`,
+
+  wifis: `  # Wi-Fi interface with access point credentials
+  wifis:
+    wlan0:
+      access-points:
+        "MyWiFi":
+          password: "mypassword"         # WPA2 password
+      dhcp4: true
+      # dhcp6: false
+      # optional: true
+`,
+
+  bridges: `  # Bridge interface combining eth0 and eth1
+  bridges:
+    br0:
+      interfaces: [eth0, eth1]
+      addresses: [192.168.1.5/24]
+      gateway4: 192.168.1.1
+      nameservers:
+        addresses: [1.1.1.1, 9.9.9.9]
+      parameters:
+        stp: true                        # Enable Spanning Tree Protocol
+        forward-delay: 4
+      # optional: true
+`,
+
+  vlans: `  # VLAN interface (802.1Q tag 100)
+  vlans:
+    vlan100:
+      id: 100
+      link: eth0                         # Parent interface
+      addresses: [192.168.100.2/24]
+      mtu: 1450
+`,
+
+  bonds: `  # Bonded (aggregated) interface
+  bonds:
+    bond0:
+      interfaces: [eth0, eth1]
+      mode: active-backup               # Other options: balance-rr, 802.3ad
+      dhcp4: true
+      # transmit-hash-policy: layer2
+      # mii-monitor-interval: 100
+`,
+
+  tunnels: `  # GRE tunnel interface
+  tunnels:
+    gre1:
+      mode: gre
+      local: 192.168.1.10
+      remote: 192.168.2.10
+      addresses: [10.1.1.1/30]
+      ttl: 64
+      # key: 123
+`,
+
+  macvlans: `  # MACVLAN interface (for containers or isolation)
+  macvlans:
+    macvlan0:
+      link: eth0
+      mode: bridge                       # Other options: vepa, private
+      addresses: [192.168.1.20/24]
+`,
+
+  veth: `  # Virtual Ethernet (veth) pair, often for containers
+  veth:
+    veth-host:
+      peer: veth-peer
+      addresses: [169.254.1.1/30]
+`,
+};
+
+
+  const snippetsSimple = {
+  ethernets: `  # Basic DHCP ethernet
+  ethernets:
+    eth0:
+      dhcp4: true
+`,
+
+  wifis: `  # Minimal Wi-Fi setup with DHCP
+  wifis:
+    wlan0:
+      access-points:
+        "SSID":
+          password: "password"
+      dhcp4: true
+`,
+
+  bridges: `  # Simple bridge with DHCP
+  bridges:
+    br0:
+      interfaces: [eth0, eth1]
+      dhcp4: true
+`,
+
+  vlans: `  # Basic VLAN with DHCP
+  vlans:
+    vlan100:
+      id: 100
+      link: eth0
+      dhcp4: true
+`,
+
+  bonds: `  # Simple bond using DHCP
+  bonds:
+    bond0:
+      interfaces: [eth0, eth1]
+      dhcp4: true
+`,
+
+  tunnels: `  # Simple GRE tunnel
+  tunnels:
+    gre1:
+      mode: gre
+      local: 192.168.1.1
+      remote: 192.168.2.1
+      addresses: [10.0.0.1/30]
+`,
+
+  macvlans: `  # MACVLAN with DHCP
+  macvlans:
+    macvlan0:
+      link: eth0
+      mode: bridge
+      dhcp4: true
+`,
+
+  veth: `  # Minimal veth pair
+  veth:
+    veth-host:
+      peer: veth-peer
+      addresses: [169.254.1.1/30]
+`
+};
+
+
+  let moduleSnippets = { ...snippetsFull };
+
+  const editor = CodeMirror.fromTextArea(document.getElementById("yamlEditor"), {
+    mode: "yaml",
+    theme: "default",
+    lineNumbers: true,
+    lineWrapping: true
+  });
+
+  const errorBox = document.getElementById("errorBox");
+  const successBox = document.getElementById("successBox");
+  const templateSelector = document.getElementById("templateSelector");
+
+  templateSelector.addEventListener("change", () => {
+    moduleSnippets = templateSelector.value === "simple" ? snippetsSimple : snippetsFull;
+    rebuildYamlFromModules();
+  });
+
+  function rebuildYamlFromModules() {
+    let fullYaml = baseTemplate;
+    document.querySelectorAll('.module-button.active').forEach(btn => {
+      fullYaml += moduleSnippets[btn.dataset.type] + '\n';
+    });
+    editor.setValue(fullYaml);
+    errorBox.style.display = "none";
+    successBox.style.display = "none";
+  }
+
+  function toggleModule(button) {
+    button.classList.toggle("active");
+    rebuildYamlFromModules();
+  }
+
+  function validateYaml() {
+    try {
+      const content = editor.getValue();
+      jsyaml.load(content);
+      errorBox.style.display = "none";
+      successBox.style.display = "block";
+    } catch (e) {
+      successBox.style.display = "none";
+      errorBox.style.display = "block";
+      errorBox.textContent = `YAML Error: ${e.message}`;
+    }
+  }
+
+  function copyToClipboard() {
+    navigator.clipboard.writeText(editor.getValue());
+  }
+
+  function downloadYaml() {
+    const blob = new Blob([editor.getValue()], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'netplan-config.yaml';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  rebuildYamlFromModules();
+</script>
+
+</body>
+</html>
