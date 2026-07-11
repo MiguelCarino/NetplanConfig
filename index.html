@@ -6,13 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Netplan Config Creator</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/material-darker.min.css">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;700&family=Red+Hat+Display:wght@700;900&display=swap" rel="stylesheet">
   <style>
     html, body { height: 100%; }
     body {
-      background-color: #1e1e2f;
+      background-color: #050505;
       color: #e0e0e0;
-      font-family: monospace;
+      font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
       margin: 0;
       padding: 0;
       display: flex;
@@ -68,81 +69,140 @@
     }
     .cs-btn:hover { border-color: #eab308 !important; color: #eab308 !important; background: rgba(234,179,8,0.05) !important; }
 
-    .layout { padding: 1rem; }
     .layout {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
-    }
-    
-    .editor-section {
-      flex: 1;
-      min-width: 300px;
-      display: flex;
-      flex-direction: column;
-      max-height: 80vh; /* Add this line */
-      overflow: hidden;  /* Prevent overflow from expanding the layout */
+      padding: 1.25rem;
+      align-items: stretch;
     }
 
-    .editor-section, .modules-section {
-      flex: 1;
-      min-width: 300px;
+    .editor-section {
+      flex: 2;
+      min-width: 320px;
+      min-height: 0;
       display: flex;
       flex-direction: column;
     }
-    .CodeMirror {
+    .modules-section {
       flex: 1;
-      height: 100%;
-      overflow: auto;
-    }
-    .CodeMirror-scroll {
-      overflow-y: auto !important;
-    }
-    .controls {
+      min-width: 240px;
+      max-width: 320px;
+      min-height: 0;
       display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
+      flex-direction: column;
+      overflow-y: auto;
     }
-    select, button {
-      padding: 0.5rem 1rem;
-      font-family: monospace;
-      font-size: 1rem;
-      border: none;
+    .modules-section h3 {
+      font-family: 'Red Hat Display', sans-serif;
+      font-size: 0.9rem; font-weight: 700; letter-spacing: 0.04em;
+      color: #e5e5e5; margin: 0 0 0.7rem; text-transform: uppercase;
+    }
+    .modules-section h3.sub { margin-top: 1.3rem; }
+    .tpl-hint {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: #6b6b6b; margin: -0.3rem 0 0.75rem; line-height: 1.4;
+    }
+
+    .CodeMirror {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid #262626;
       border-radius: 6px;
-      background-color: #2d3748;
-      color: #e0e0e0;
-      cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.85rem;
     }
-    button:hover {
-      background-color: #4a5568;
-    }
-    .error {
-      color: #ff6b6b;
-      background: #2c1e1e;
-      padding: 0.75rem;
-      border: 1px solid #ff6b6b;
-      margin-top: 1rem;
+    .CodeMirror-scroll { overflow-y: auto !important; }
+
+    .error, .success, .warn {
+      flex: 0 0 auto;
+      padding: 0.7rem 0.85rem;
+      margin-top: 0.75rem;
       border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      border: 1px solid;
     }
-    .success {
-      color: #38c172;
-      background: #1e2e1e;
-      padding: 0.75rem;
-      border: 1px solid #38c172;
-      margin-top: 1rem;
-      border-radius: 6px;
+    .error { color:#fca5a5; background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.5); }
+    .success { color:#86efac; background:rgba(34,197,94,0.08); border-color:rgba(34,197,94,0.5); }
+    .warn { color:#fcd34d; background:rgba(234,179,8,0.08); border-color:rgba(234,179,8,0.45); }
+    .warn code { background:#1a1a1a; padding:1px 5px; border-radius:3px; color:#fde68a; }
+    .warn b { color:#fde68a; }
+
+    /* --- custom interface builder --- */
+    .iface-card {
+      border: 1px solid #262626; border-radius: 5px;
+      padding: 0.55rem; margin-bottom: 0.6rem;
+      display: flex; flex-direction: column; gap: 0.4rem;
+      background: rgba(255,255,255,0.02);
     }
-    .module-button {
+    .iface-head { display: flex; gap: 0.35rem; align-items: center; }
+    .iface-card input[type=text], .if-addr, .if-name, .if-ssid, .if-psk {
+      background: #0d0d0d; border: 1px solid #262626; border-radius: 4px;
+      color: #e0e0e0; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
+      padding: 0.35rem 0.45rem; width: 100%; box-sizing: border-box;
+    }
+    .iface-card input:focus, .if-type:focus { outline: none; border-color: #eab308; }
+    .if-name { flex: 1 1 auto; min-width: 0; }
+    .if-type {
+      background: #0d0d0d; border: 1px solid #262626; color: #a3a3a3;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      border-radius: 4px; padding: 0.3rem; cursor: pointer; flex: 0 0 auto;
+    }
+    .if-del {
+      background: transparent; border: 1px solid #262626; color: #888;
+      border-radius: 4px; cursor: pointer; width: 26px; height: 26px;
+      font-size: 1rem; line-height: 1; flex: 0 0 auto; padding: 0;
+    }
+    .if-del:hover { border-color: #ef4444; color: #ef4444; }
+    .if-opts { display: flex; gap: 0.8rem; }
+    .if-chk {
+      display: flex; align-items: center; gap: 0.3rem;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem;
+      color: #a3a3a3; text-transform: uppercase; cursor: pointer;
+    }
+    .if-chk input { accent-color: #eab308; margin: 0; }
+    .fam-row { display: flex; gap: 1.4rem; margin-bottom: 0.6rem; }
+    .fam-row .if-chk { font-size: 0.72rem; }
+    .if-wifi { display: flex; flex-direction: column; gap: 0.35rem; }
+    .module-button.superseded { opacity: 0.4; }
+    .module-button.superseded::after { content: " · custom"; font-size: 0.6rem; opacity: 0.8; }
+
+    .module-button, .template-button {
       display: block;
       width: 100%;
       margin-bottom: 0.5rem;
-      background-color: #394867;
+      text-align: left;
+      background: transparent;
+      border: 1px solid #262626;
+      border-radius: 4px;
+      color: #a3a3a3;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.6rem 0.8rem;
+      cursor: pointer;
+      transition: 0.2s;
     }
-    .module-button.active {
-      background-color: #2b6cb0;
-      font-weight: bold;
+    .module-button:hover, .template-button:hover {
+      border-color: #eab308;
+      color: #eab308;
+      background: rgba(234,179,8,0.05);
+    }
+    .module-button.active, .template-button.active {
+      background: #eab308;
+      border-color: #eab308;
+      color: #050505;
+      font-weight: 700;
+    }
+    .module-button.active:hover, .template-button.active:hover {
+      background: #fbbf24;
+      color: #050505;
     }
   </style>
 </head>
@@ -150,11 +210,6 @@
 
 <header class="cs-header">
   <div class="cs-right">
-    <select id="templateSelector" class="cs-select">
-      <option value="full">Full Showcase</option>
-      <option value="simple">Simple Showcase</option>
-    </select>
-    <div class="cs-vdiv"></div>
     <button onclick="validateYaml()" class="cs-btn">Validate</button>
     <button onclick="copyToClipboard()" class="cs-btn">Copy</button>
     <button onclick="downloadYaml()" class="cs-btn">Download</button>
@@ -164,19 +219,37 @@
 <div class="layout">
   <div class="editor-section">
     <textarea id="yamlEditor"></textarea>
+    <div id="warnBox" class="warn" style="display: none;"></div>
     <div id="errorBox" class="error" style="display: none;"></div>
     <div id="successBox" class="success" style="display: none;">✔ No problems found.</div>
   </div>
   <div class="modules-section">
-    <h3>📦 Netplan Modules</h3>
+    <h3>Template</h3>
+    <div class="tpl-hint" id="tplHint"></div>
+    <button class="template-button active" data-tpl="full"      onclick="setTemplate('full')">Full Showcase</button>
+    <button class="template-button"        data-tpl="simple"    onclick="setTemplate('simple')">Simple</button>
+    <button class="template-button"        data-tpl="reference" onclick="setTemplate('reference')">Simple + Full Comments</button>
+
+    <h3 class="sub">Address families</h3>
+    <div class="tpl-hint">Toggle IPv4 / IPv6 lines across every config — templates and custom interfaces.</div>
+    <div class="fam-row">
+      <label class="if-chk"><input type="checkbox" id="famV4" checked onchange="setFamily()"> IPv4</label>
+      <label class="if-chk"><input type="checkbox" id="famV6" checked onchange="setFamily()"> IPv6</label>
+    </div>
+
+    <h3 class="sub">Modules</h3>
     <button class="module-button active" data-type="ethernets" onclick="toggleModule(this)">Ethernets</button>
     <button class="module-button active" data-type="wifis" onclick="toggleModule(this)">Wi-Fi</button>
     <button class="module-button active" data-type="bridges" onclick="toggleModule(this)">Bridge</button>
     <button class="module-button active" data-type="vlans" onclick="toggleModule(this)">VLAN</button>
     <button class="module-button active" data-type="bonds" onclick="toggleModule(this)">Bond</button>
     <button class="module-button active" data-type="tunnels" onclick="toggleModule(this)">Tunnels</button>
-    <button class="module-button active" data-type="macvlans" onclick="toggleModule(this)">MACVLAN</button>
-    <button class="module-button active" data-type="veth" onclick="toggleModule(this)">Veth</button>
+    <button class="module-button active" data-type="veth" onclick="toggleModule(this)">Virtual Eth</button>
+
+    <h3 class="sub">Interfaces</h3>
+    <div class="tpl-hint">Define your real NICs (enp1s0, eno1, wlp2s0…). Any rows here replace the Ethernets/Wi-Fi module examples.</div>
+    <div id="ifaceList"></div>
+    <button class="template-button" id="addIfaceBtn" onclick="addIface()">+ Add interface</button>
   </div>
 </div>
 
@@ -196,182 +269,274 @@ network:
   renderer: networkd
 `;
 
- const snippetsFull = {
-  ethernets: `  # Static Ethernet interface
-  ethernets:
-    eth0:
-      match:
-        macaddress: "00:11:22:33:44:55"  # Ensures correct device
-      set-name: lan0                     # Renames device for clarity
-      mtu: 1500                          # Optional: set MTU
-      dhcp4: no
-      addresses: [192.168.1.10/24]
-      gateway4: 192.168.1.1
-      nameservers:
-        addresses: [8.8.8.8, 8.8.4.4]
-        search: [example.local]
-      # dhcp6: no
-      # optional: true
-`,
+  // ---- family-aware module builders ---------------------------------------
+  // Each returns a device block for the current verbosity (full/simple) and the
+  // active address families. IPv4/IPv6 lines appear only when that family is on;
+  // with a single family we also pin link-local and disable the other stack.
+  const fam = (v4, v6) => v4 && v6 ? "dual-stack" : v4 ? "IPv4-only" : "IPv6-only";
 
-  wifis: `  # Wi-Fi interface with access point credentials
-  wifis:
-    wlan0:
-      access-points:
-        "MyWiFi":
-          password: "mypassword"         # WPA2 password
-      dhcp4: true
-      # dhcp6: false
-      # optional: true
-`,
+  // Append an aligned "# explanation" to a config line (skipped when no comment,
+  // e.g. simple mode). Keeps the YAML readable without hand-aligning by eye.
+  function L(content, comment) {
+    if (!comment) return content + "\n";
+    const w = 46;
+    const pad = content.length >= w ? "  " : " ".repeat(w - content.length);
+    return content + pad + "# " + comment + "\n";
+  }
 
-  bridges: `  # Bridge interface combining eth0 and eth1
-  bridges:
-    br0:
-      interfaces: [eth0, eth1]
-      addresses: [192.168.1.5/24]
-      gateway4: 192.168.1.1
-      nameservers:
-        addresses: [1.1.1.1, 9.9.9.9]
-      parameters:
-        stp: true                        # Enable Spanning Tree Protocol
-        forward-delay: 4
-      # optional: true
-`,
+  // dhcp{4,6}-overrides block. a4/a6: null = family off (skip); true = DHCP on
+  // (emit active); false = DHCP off (emit commented, since it only applies when
+  // that DHCP is enabled). m4/m6 are the route-metric per interface.
+  function dhcpOv(a4, a6, m4, m6) {
+    const b = "      ";
+    const blk = (n, on, metric) => {
+      const c = on ? "" : "# ";
+      const fv = n === "4" ? "v4" : "v6";
+      let t = L(b + c + "dhcp" + n + "-overrides:", on ? "tune how the DHCP" + fv + " lease is applied" : "only takes effect when dhcp" + n + " is on");
+      t += L(b + c + "  route-metric: " + metric, "default-route priority — lower wins over other links");
+      if (n === "4") {
+        t += L(b + c + "  use-dns: true", "accept DNS servers offered in the lease");
+        t += L(b + c + "  use-routes: true", "accept extra routes offered in the lease");
+      }
+      return t;
+    };
+    let s = "";
+    if (a4 !== null) s += blk("4", a4, m4);
+    if (a6 !== null) s += blk("6", a6, m6);
+    return s;
+  }
 
-  vlans: `  # VLAN interface (802.1Q tag 100)
-  vlans:
-    vlan100:
-      id: 100
-      link: eth0                         # Parent interface
-      addresses: [192.168.100.2/24]
-      mtu: 1450
-`,
+  // Shared addressing tail: merges v4/v6 into single addresses/routes/nameservers
+  // blocks (one default route per family is legal). Comments only in full mode.
+  function tail(addrs, routes, ns, v4, v6, search, full) {
+    const b = "      ";
+    const cm = (t) => full ? t : false;
+    let s = "";
+    if (addrs.length) s += L(b + "addresses: [" + addrs.join(", ") + "]", cm("static IP(s) in CIDR form — one or more, any family"));
+    if (routes.length) {
+      s += L(b + "routes:", cm("default route(s): one per IP family — replaces gateway4/6"));
+      routes.forEach(r => {
+        s += b + "  - to: default\n";
+        s += L(b + "    via: " + r.via, cm(r.note));
+      });
+    }
+    if (ns.length) {
+      s += L(b + "nameservers:", cm("DNS resolvers for this link"));
+      s += L(b + "  addresses: [" + ns.join(", ") + "]", cm("resolver IPs (IPv4 and/or IPv6)"));
+      if (search) s += L(b + "  search: [example.local]", cm("domains appended to unqualified host names"));
+    }
+    if (v4 && !v6) s += L(b + "link-local: [ ipv4 ]", cm("keep only the IPv4 link-local address"));
+    else if (v6 && !v4) s += L(b + "link-local: [ ipv6 ]", cm("keep only the IPv6 link-local address"));
+    return s;
+  }
 
-  bonds: `  # Bonded (aggregated) interface
-  bonds:
-    bond0:
-      interfaces: [eth0, eth1]
-      mode: active-backup               # Other options: balance-rr, 802.3ad
-      dhcp4: true
-      # transmit-hash-policy: layer2
-      # mii-monitor-interval: 100
-`,
+  function bEthernets(full, v4, v6) {
+    const b = "      ";
+    let s = "  # Ethernet interface — " + fam(v4, v6) + "\n  ethernets:\n    eth0:\n";
+    if (full) {
+      s += L(b + "match:", "select the physical NIC by a stable attribute");
+      s += L(b + '  macaddress: "00:11:22:33:44:55"', "bind this block to one card by its MAC");
+      s += L(b + "set-name: lan0", "rename the matched device to a predictable name");
+      s += L(b + "mtu: 1500", "link MTU in bytes (1500 = standard Ethernet)");
+    }
+    const addrs = [], routes = [], ns = [];
+    if (v4) {
+      s += L(b + "dhcp4: " + (full ? "no" : "true"), full ? "IPv4 via DHCP? 'no' = use the static address below" : "request an IPv4 address over DHCP");
+      if (full) { addrs.push("192.168.1.10/24"); routes.push({ via: "192.168.1.1", note: "IPv4 default gateway" }); ns.push("8.8.8.8", "8.8.4.4"); }
+    } else {
+      s += L(b + "dhcp4: false", "IPv4 disabled on this interface");
+    }
+    if (v6) {
+      s += L(b + "dhcp6: " + (full ? "no" : "true"), full ? "IPv6 via DHCPv6? 'no' = static + RA below" : "request an IPv6 address over DHCPv6");
+      if (full) { s += L(b + "accept-ra: true", "honour IPv6 Router Advertisements (SLAAC/route)"); addrs.push('"2001:db8::10/64"'); routes.push({ via: '"2001:db8::1"', note: "IPv6 default gateway" }); ns.push('"2001:4860:4860::8888"'); }
+    } else {
+      s += L(b + "accept-ra: false", "ignore IPv6 Router Advertisements");
+    }
+    s += dhcpOv(v4 ? !full : null, v6 ? !full : null, 100, 100);
+    s += tail(addrs, routes, ns, v4, v6, full && v4, full);
+    return s;
+  }
 
-  tunnels: `  # GRE tunnel interface
-  tunnels:
-    gre1:
-      mode: gre
-      local: 192.168.1.10
-      remote: 192.168.2.10
-      addresses: [10.1.1.1/30]
-      ttl: 64
-      # key: 123
-`,
+  function bWifis(full, v4, v6) {
+    const b = "      ";
+    let s = "  # Wi-Fi interface — " + fam(v4, v6) + "\n  wifis:\n    wlan0:\n";
+    s += L(b + "access-points:", "SSIDs this interface may join");
+    s += b + '  "MyWiFi":\n';
+    s += L(b + '    password: "mypassword"', "WPA/WPA2 passphrase (omit the key for open networks)");
+    if (v4) s += L(b + "dhcp4: true", "request an IPv4 address over DHCP");
+    else    s += L(b + "dhcp4: false", "IPv4 disabled on this interface");
+    if (v6) s += L(b + "dhcp6: true", "request an IPv6 address over DHCPv6");
+    else    s += L(b + "accept-ra: false", "ignore IPv6 Router Advertisements");
+    s += dhcpOv(v4 ? true : null, v6 ? true : null, 600, 600);   // higher metric so wired beats Wi-Fi
+    if (v4 && !v6) s += L(b + "link-local: [ ipv4 ]", "keep only the IPv4 link-local address");
+    else if (v6 && !v4) s += L(b + "link-local: [ ipv6 ]", "keep only the IPv6 link-local address");
+    return s;
+  }
 
-  macvlans: `  # MACVLAN interface (for containers or isolation)
-  macvlans:
-    macvlan0:
-      link: eth0
-      mode: bridge                       # Other options: vepa, private
-      addresses: [192.168.1.20/24]
-`,
+  function bBridges(full, v4, v6) {
+    const b = "      ";
+    let s = "  # Bridge (software switch) — " + fam(v4, v6) + "\n  bridges:\n    br0:\n";
+    s += L(b + "interfaces: [eth0, eth1]", "member ports enslaved to the bridge");
+    const addrs = [], routes = [], ns = [];
+    if (v4) {
+      s += L(b + "dhcp4: " + (full ? "no" : "true"), full ? "'no' = use the static address below" : "request an IPv4 address over DHCP");
+      if (full) { addrs.push("192.168.1.5/24"); routes.push({ via: "192.168.1.1", note: "IPv4 default gateway" }); ns.push("1.1.1.1", "9.9.9.9"); }
+    } else {
+      s += L(b + "dhcp4: false", "IPv4 disabled on this bridge");
+    }
+    if (v6) {
+      s += L(b + "dhcp6: " + (full ? "no" : "true"), full ? "'no' = static + RA below" : "request an IPv6 address over DHCPv6");
+      if (full) { s += L(b + "accept-ra: true", "honour IPv6 Router Advertisements"); addrs.push('"2001:db8:0:1::5/64"'); routes.push({ via: '"2001:db8:0:1::1"', note: "IPv6 default gateway" }); }
+    } else {
+      s += L(b + "accept-ra: false", "ignore IPv6 Router Advertisements");
+    }
+    s += dhcpOv(v4 ? !full : null, v6 ? !full : null, 100, 100);
+    s += tail(addrs, routes, ns, v4, v6, false, full);
+    if (full) {
+      s += L(b + "parameters:", "bridge (Spanning Tree) tuning");
+      s += L(b + "  stp: true", "enable STP to prevent forwarding loops");
+      s += L(b + "  forward-delay: 4", "seconds a port waits before it forwards");
+    }
+    return s;
+  }
 
-  veth: `  # Virtual Ethernet (veth) pair, often for containers
-  veth:
-    veth-host:
-      peer: veth-peer
-      addresses: [169.254.1.1/30]
-`,
-};
+  function bVlans(full, v4, v6) {
+    const b = "      ";
+    let s = "  # VLAN (802.1Q tagged sub-interface) — " + fam(v4, v6) + "\n  vlans:\n    vlan100:\n";
+    s += L(b + "id: 100", "802.1Q VLAN tag, 1–4094");
+    s += L(b + "link: eth0", "parent interface that carries the tagged frames");
+    const addrs = [];
+    if (v4) addrs.push("192.168.100.2/24");
+    if (v6) addrs.push('"2001:db8:100::2/64"');
+    s += tail(addrs, [], [], v4, v6, false, full);
+    if (full) s += L(b + "mtu: 1450", "trim MTU to leave room for the 4-byte VLAN tag");
+    return s;
+  }
 
+  function bBonds(full, v4, v6) {
+    const b = "      ";
+    let s = "  # Bond (link aggregation) — " + fam(v4, v6) + "\n  bonds:\n    bond0:\n";
+    s += L(b + "interfaces: [eth0, eth1]", "physical links combined into the bond");
+    s += L(b + "parameters:", "bonding behaviour (mode lives here, not at top level)");
+    s += L(b + "  mode: active-backup", "one active link, rest standby (or balance-rr, 802.3ad)");
+    if (full) s += L(b + "  mii-monitor-interval: 100", "link-health poll interval in ms");
+    if (v4) s += L(b + "dhcp4: true", "request an IPv4 address over DHCP");
+    else    s += L(b + "dhcp4: false", "IPv4 disabled on the bond");
+    if (v6) s += L(b + "dhcp6: true", "request an IPv6 address over DHCPv6");
+    else    s += L(b + "accept-ra: false", "ignore IPv6 Router Advertisements");
+    s += dhcpOv(v4 ? true : null, v6 ? true : null, 100, 100);
+    if (v4 && !v6) s += L(b + "link-local: [ ipv4 ]", "keep only the IPv4 link-local address");
+    else if (v6 && !v4) s += L(b + "link-local: [ ipv6 ]", "keep only the IPv6 link-local address");
+    return s;
+  }
 
-  const snippetsSimple = {
-  ethernets: `  # Basic DHCP ethernet
-  ethernets:
-    eth0:
-      dhcp4: true
-`,
+  function bTunnels(full, v4, v6) {
+    const b = "      ";
+    const v6only = v6 && !v4;
+    let s = "  # GRE tunnel — " + (v6only ? "IPv6 transport (ip6gre)" : "IPv4 transport") + "\n  tunnels:\n    gre1:\n";
+    if (v6only) {
+      s += L(b + "mode: ip6gre", "GRE encapsulated over an IPv6 underlay");
+      s += L(b + 'local: "2001:db8::1"', "this host's IPv6 tunnel endpoint");
+      s += L(b + 'remote: "2001:db8::2"', "the peer's IPv6 tunnel endpoint");
+    } else {
+      s += L(b + "mode: gre", "generic routing encapsulation over IPv4");
+      s += L(b + "local: 192.168.1.10", "this host's IPv4 tunnel endpoint");
+      s += L(b + "remote: 192.168.2.10", "the peer's IPv4 tunnel endpoint");
+    }
+    const addrs = [];
+    if (v4) addrs.push("10.1.1.1/30");
+    if (v6) addrs.push('"fd00:1::1/64"');
+    s += tail(addrs, [], [], v4, v6, false, full);
+    if (full) s += L(b + "ttl: 64", "TTL / hop-limit stamped on encapsulated packets");
+    return s;
+  }
 
-  wifis: `  # Minimal Wi-Fi setup with DHCP
-  wifis:
-    wlan0:
-      access-points:
-        "SSID":
-          password: "password"
-      dhcp4: true
-`,
+  function bVeth(full, v4, v6) {
+    const b = "      ";
+    let s = "  # Virtual Ethernet pair (veth) — " + fam(v4, v6) + "\n  virtual-ethernets:\n";
+    s += "    veth-host:\n";
+    s += L(b + "peer: veth-peer", "the other end of this virtual cable");
+    s += "    veth-peer:\n";
+    s += L(b + "peer: veth-host", "points back to veth-host to complete the pair");
+    const addrs = [];
+    if (v4) addrs.push("169.254.1.1/30");
+    if (v6) addrs.push('"fd00:2::1/64"');
+    s += tail(addrs, [], [], v4, v6, false, full);
+    return s;
+  }
 
-  bridges: `  # Simple bridge with DHCP
-  bridges:
-    br0:
-      interfaces: [eth0, eth1]
-      dhcp4: true
-`,
-
-  vlans: `  # Basic VLAN with DHCP
-  vlans:
-    vlan100:
-      id: 100
-      link: eth0
-      dhcp4: true
-`,
-
-  bonds: `  # Simple bond using DHCP
-  bonds:
-    bond0:
-      interfaces: [eth0, eth1]
-      dhcp4: true
-`,
-
-  tunnels: `  # Simple GRE tunnel
-  tunnels:
-    gre1:
-      mode: gre
-      local: 192.168.1.1
-      remote: 192.168.2.1
-      addresses: [10.0.0.1/30]
-`,
-
-  macvlans: `  # MACVLAN with DHCP
-  macvlans:
-    macvlan0:
-      link: eth0
-      mode: bridge
-      dhcp4: true
-`,
-
-  veth: `  # Minimal veth pair
-  veth:
-    veth-host:
-      peer: veth-peer
-      addresses: [169.254.1.1/30]
-`
-};
-
-
-  let moduleSnippets = { ...snippetsFull };
+  const MODULE_BUILDERS = {
+    ethernets: bEthernets, wifis: bWifis, bridges: bBridges,
+    vlans: bVlans, bonds: bBonds, tunnels: bTunnels, veth: bVeth,
+  };
+  const TEMPLATES = {
+    full:      { hint: "Full showcase — every option, ready to trim." },
+    simple:    { hint: "Minimal working config (DHCP)." },
+    reference: { hint: "Simple config + every full option as comments — enable later, no revisit." },
+  };
+  let currentTemplate = "full";
+  let fam4 = true, fam6 = true;   // active address families (checkboxes)
 
   const editor = CodeMirror.fromTextArea(document.getElementById("yamlEditor"), {
     mode: "yaml",
-    theme: "default",
+    theme: "material-darker",
     lineNumbers: true,
     lineWrapping: true
   });
 
   const errorBox = document.getElementById("errorBox");
   const successBox = document.getElementById("successBox");
-  const templateSelector = document.getElementById("templateSelector");
+  const warnBox = document.getElementById("warnBox");
+  const tplHint = document.getElementById("tplHint");
 
-  templateSelector.addEventListener("change", () => {
-    moduleSnippets = templateSelector.value === "simple" ? snippetsSimple : snippetsFull;
+  // Comment out a full snippet so it reads as a reference block under the
+  // active simple config: keep the 2-space "under network:" indent, prefix #.
+  function commentOut(text) {
+    return text.split("\n")
+      .map(l => l.length ? "  #" + l.slice(2) : l)
+      .join("\n");
+  }
+
+  function snippetFor(type) {
+    const build = MODULE_BUILDERS[type];
+    if (!build) return "";
+    if (currentTemplate === "reference") {
+      return build(false, fam4, fam6) +
+        "  # ---- full reference (uncomment as needed) ----\n" +
+        commentOut(build(true, fam4, fam6));
+    }
+    return build(currentTemplate === "full", fam4, fam6);
+  }
+
+  function setTemplate(name) {
+    if (!TEMPLATES[name]) return;
+    currentTemplate = name;
+    tplHint.textContent = TEMPLATES[name].hint;
+    document.querySelectorAll(".template-button").forEach(b =>
+      b.classList.toggle("active", b.dataset.tpl === name));
     rebuildYamlFromModules();
-  });
+  }
+
+  // IPv4 / IPv6 checkboxes — filter address families across every config.
+  function setFamily() {
+    const c4 = document.getElementById("famV4");
+    const c6 = document.getElementById("famV6");
+    if (!c4.checked && !c6.checked) c4.checked = true;   // never zero families
+    fam4 = c4.checked; fam6 = c6.checked;
+    renderIfaces();               // reflect in the custom-interface cards too
+    rebuildYamlFromModules();
+  }
 
   function rebuildYamlFromModules() {
+    const custom = ifaces.length > 0;
     let fullYaml = baseTemplate;
+    if (custom) fullYaml += buildInterfaces() + '\n';
     document.querySelectorAll('.module-button.active').forEach(btn => {
-      fullYaml += moduleSnippets[btn.dataset.type] + '\n';
+      const t = btn.dataset.type;
+      // Custom interfaces own the ethernets:/wifis: blocks — don't emit the
+      // example modules too, or we'd get a duplicate top-level key.
+      if (custom && (t === "ethernets" || t === "wifis")) return;
+      fullYaml += snippetFor(t) + '\n';
     });
     editor.setValue(fullYaml);
     errorBox.style.display = "none";
@@ -381,6 +546,208 @@ network:
   function toggleModule(button) {
     button.classList.toggle("active");
     rebuildYamlFromModules();
+  }
+
+  // ---- custom interface builder ----------------------------------------
+  // Real predictable NIC names (systemd): enp = PCI ethernet, eno = onboard,
+  // ens = hotplug slot, wlp = PCI Wi-Fi.
+  let ifaces = [];
+  const NAME_POOL = {
+    ethernet: ["enp1s0", "enp2s0", "eno1", "eno2", "ens3", "enp3s0", "enp4s0"],
+    wifi:     ["wlp2s0", "wlp3s0", "wlan0", "wlp5s0"],
+  };
+  function suggestName(type) {
+    const used = new Set(ifaces.map(i => i.name));
+    for (const n of NAME_POOL[type]) if (!used.has(n)) return n;
+    return (type === "wifi" ? "wlan" : "eth") + ifaces.length;
+  }
+
+  function addIface() {
+    ifaces.push({ name: suggestName("ethernet"), type: "ethernet",
+                  dhcp4: true, dhcp6: false, addr: "", ssid: "MyWiFi", psk: "mypassword" });
+    renderIfaces();
+    rebuildYamlFromModules();
+  }
+  function removeIface(idx) { ifaces.splice(idx, 1); renderIfaces(); rebuildYamlFromModules(); }
+
+  function renderIfaces() {
+    const list = document.getElementById("ifaceList");
+    list.innerHTML = "";
+    ifaces.forEach((it, idx) => {
+      const card = document.createElement("div");
+      card.className = "iface-card";
+      card.innerHTML =
+        '<div class="iface-head">' +
+          '<input type="text" class="if-name" placeholder="interface name">' +
+          '<select class="if-type"><option value="ethernet">eth</option><option value="wifi">wifi</option></select>' +
+          '<button class="if-del" title="Remove interface">&times;</button>' +
+        '</div>' +
+        '<div class="if-opts">' +
+          '<label class="if-chk"><input type="checkbox" class="if-d4"> DHCPv4</label>' +
+          '<label class="if-chk"><input type="checkbox" class="if-d6"> DHCPv6</label>' +
+        '</div>' +
+        '<input type="text" class="if-addr" placeholder="static address, e.g. 192.168.1.10/24">' +
+        '<div class="if-wifi">' +
+          '<input type="text" class="if-ssid" placeholder="Wi-Fi SSID">' +
+          '<input type="text" class="if-psk" placeholder="Wi-Fi password">' +
+        '</div>';
+
+      const $ = (s) => card.querySelector(s);
+      $(".if-name").value = it.name;
+      $(".if-type").value = it.type;
+      $(".if-d4").checked = it.dhcp4;
+      $(".if-d6").checked = it.dhcp6;
+      $(".if-addr").value = it.addr;
+      $(".if-ssid").value = it.ssid;
+      $(".if-psk").value  = it.psk;
+      $(".if-wifi").style.display = it.type === "wifi" ? "flex" : "none";
+      // Hide the DHCP toggle for a globally-disabled family.
+      $(".if-d4").closest(".if-chk").style.display = fam4 ? "flex" : "none";
+      $(".if-d6").closest(".if-chk").style.display = fam6 ? "flex" : "none";
+
+      // Live edits update the model + YAML without re-rendering (keeps focus).
+      $(".if-name").addEventListener("input", (e) => { it.name = e.target.value.trim() || suggestName(it.type); rebuildYamlFromModules(); });
+      $(".if-addr").addEventListener("input", (e) => { it.addr = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".if-ssid").addEventListener("input", (e) => { it.ssid = e.target.value; rebuildYamlFromModules(); });
+      $(".if-psk").addEventListener("input",  (e) => { it.psk  = e.target.value; rebuildYamlFromModules(); });
+      $(".if-d4").addEventListener("change", (e) => { it.dhcp4 = e.target.checked; rebuildYamlFromModules(); });
+      $(".if-d6").addEventListener("change", (e) => { it.dhcp6 = e.target.checked; rebuildYamlFromModules(); });
+      // Type change toggles the Wi-Fi fields, so re-render this card set.
+      $(".if-type").addEventListener("change", (e) => { it.type = e.target.value; renderIfaces(); rebuildYamlFromModules(); });
+      $(".if-del").addEventListener("click", () => removeIface(idx));
+
+      list.appendChild(card);
+    });
+    // Dim the modules the builder now owns.
+    const has = ifaces.length > 0;
+    document.querySelectorAll('.module-button[data-type="ethernets"], .module-button[data-type="wifis"]')
+      .forEach(b => b.classList.toggle("superseded", has));
+  }
+
+  // Commented "menu" of the remaining full options, appended under each custom
+  // interface in reference mode so it can be enabled later without revisiting.
+  // (dhcp4 is omitted — it's always emitted active, so it would duplicate.)
+  const ETH_REF =
+`      # --- optional settings (uncomment to use) ---
+      # dhcp4: no                            # override: turn IPv4 DHCP off
+      # dhcp6: yes                           # override: turn IPv6 DHCP on
+      # accept-ra: false                     # ignore IPv6 router advertisements
+      # dhcp4-overrides:                     # only applies when dhcp4 is on
+      #   route-metric: 100                  #   default-route priority (lower = preferred)
+      #   use-dns: true                      #   accept DNS servers from the lease
+      # dhcp6-overrides:                     # only applies when dhcp6 is on
+      #   route-metric: 100
+      # match:
+      #   macaddress: "00:11:22:33:44:55"   # bind to a specific NIC
+      # set-name: lan0                       # rename the device
+      # mtu: 1500
+      # addresses: [192.168.1.10/24]         # add a static address
+      # routes:
+      #   - to: default                      # gateway (replaces deprecated gateway4)
+      #     via: 192.168.1.1
+      # nameservers:
+      #   addresses: [8.8.8.8, 8.8.4.4]
+      #   search: [example.local]
+      # optional: true
+`;
+  const WIFI_REF =
+`      # --- optional settings (uncomment to use) ---
+      # dhcp4: no                            # override: turn IPv4 DHCP off
+      # dhcp6: yes                           # override: turn IPv6 DHCP on
+      # dhcp4-overrides:                     # only applies when dhcp4 is on
+      #   route-metric: 600                  #   Wi-Fi kept lower priority than wired
+      # dhcp6-overrides:                     # only applies when dhcp6 is on
+      #   route-metric: 600
+      # addresses: [192.168.1.20/24]         # static instead of DHCP
+      # routes:
+      #   - to: default
+      #     via: 192.168.1.1
+      # nameservers:
+      #   addresses: [1.1.1.1, 9.9.9.9]
+      # hidden: true                         # connect to a non-broadcast SSID
+      # optional: true
+`;
+
+  function ifaceBody(i) {
+    const q = "      ";
+    let s = "    " + (i.name || "iface") + ":\n";
+    // Respect the global IPv4/IPv6 family toggles here too.
+    const d4 = fam4 && i.dhcp4;
+    const d6 = fam6 && i.dhcp6;
+    const addrV6 = /:/.test(i.addr);
+    const showAddr = !!i.addr && ((addrV6 && fam6) || (!addrV6 && fam4));
+    // route-metric per interface: wired preferred (100) over Wi-Fi (600).
+    const metric = i.type === "wifi" ? 600 : 100;
+    if (d4) {
+      s += q + "dhcp4: true\n";
+      s += q + "dhcp4-overrides:\n" + q + "  route-metric: " + metric + "\n";
+    } else if (showAddr && !addrV6) s += q + "dhcp4: false\n";
+    if (d6) {
+      s += q + "dhcp6: true\n";
+      s += q + "dhcp6-overrides:\n" + q + "  route-metric: " + metric + "\n";
+    }
+    if (showAddr) {
+      const a = addrV6 ? '"' + i.addr + '"' : i.addr;   // quote IPv6
+      s += q + "addresses: [ " + a + " ]\n";
+    }
+    if (!d4 && !d6 && !showAddr) s += q + (fam4 ? "dhcp4: true\n" : "dhcp6: true\n");  // sane default
+    return s;
+  }
+  function buildInterfaces() {
+    const eth  = ifaces.filter(i => i.type === "ethernet");
+    const wifi = ifaces.filter(i => i.type === "wifi");
+    const ref  = currentTemplate === "reference";   // add commented option menus
+    let out = "";
+    if (eth.length) {
+      out += "  # Custom Ethernet interfaces\n  ethernets:\n";
+      eth.forEach(i => { out += ifaceBody(i); if (ref) out += ETH_REF; });
+    }
+    if (wifi.length) {
+      out += "  # Custom Wi-Fi interfaces\n  wifis:\n";
+      wifi.forEach(i => {
+        out += "    " + (i.name || "iface") + ":\n";
+        out += "      access-points:\n";
+        out += '        "' + (i.ssid || "SSID") + '":\n';
+        out += '          password: "' + (i.psk || "") + '"\n';
+        out += ifaceBody(i).split("\n").slice(1).join("\n");  // reuse addressing lines
+        if (ref) out += WIFI_REF;
+      });
+    }
+    return out;
+  }
+
+  // ---- DHCP + static-address analyzer ----------------------------------
+  function analyzeConfig() {
+    let doc;
+    try { doc = jsyaml.load(editor.getValue()); }
+    catch (e) { warnBox.style.display = "none"; return; }   // invalid mid-edit → stay quiet
+    const net = doc && doc.network;
+    if (!net || typeof net !== "object") { warnBox.style.display = "none"; return; }
+    const TYPES = ["ethernets", "wifis", "bridges", "vlans", "bonds", "tunnels", "virtual-ethernets"];
+    const hits = [];
+    for (const t of TYPES) {
+      const grp = net[t];
+      if (!grp || typeof grp !== "object") continue;
+      for (const [name, cfg] of Object.entries(grp)) {
+        if (!cfg || typeof cfg !== "object") continue;
+        const hasAddr = Array.isArray(cfg.addresses) && cfg.addresses.length > 0;
+        const d4 = cfg.dhcp4 === true, d6 = cfg.dhcp6 === true;
+        if (hasAddr && (d4 || d6)) {
+          const which = [d4 && "DHCPv4", d6 && "DHCPv6"].filter(Boolean).join(" + ");
+          hits.push(name + ": " + which + " + static " + cfg.addresses.join(", "));
+        }
+      }
+    }
+    if (!hits.length) { warnBox.style.display = "none"; return; }
+    warnBox.style.display = "block";
+    warnBox.innerHTML =
+      "&#9888; <b>DHCP and a static address on the same interface</b><br>" +
+      hits.map(h => "&bull; " + h).join("<br>") +
+      "<br><br>This is valid, but <code>networkd</code> applies <b>both</b>: the interface keeps the " +
+      "static address <i>and</i> accepts the DHCP lease, so it ends up multi-homed. Each source can " +
+      "install a <b>default route</b>, and the competing route metrics decide egress non-deterministically. " +
+      "Use it only for intentional multi-addressing. Otherwise set <code>dhcp4: false</code> " +
+      "(and/or <code>dhcp6: false</code>) when you assign a static address, or drop the static and let DHCP manage it.";
   }
 
   function validateYaml() {
@@ -410,7 +777,15 @@ network:
     URL.revokeObjectURL(url);
   }
 
-  rebuildYamlFromModules();
+  // Live DHCP-vs-static analysis whenever the document changes (lightly debounced).
+  let analyzeTimer = null;
+  editor.on("change", () => {
+    clearTimeout(analyzeTimer);
+    analyzeTimer = setTimeout(analyzeConfig, 120);
+  });
+
+  renderIfaces();
+  setTemplate("full");
 </script>
 
 <script src="carino-navbar.js" data-app="Netplan" defer></script>
