@@ -4,9 +4,10 @@
     <link rel="icon" type="image/webp" href="logo.webp">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Netplan Config Creator</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/material-darker.min.css">
+  <title>Linux Network Config Creator — netplan · networkd · NetworkManager</title>
+  <!-- Vendored, not CDN — see vendor/README.md. All MIT, keeping their own licences. -->
+  <link rel="stylesheet" href="vendor/codemirror-5.65.13.min.css">
+  <link rel="stylesheet" href="vendor/codemirror-theme-material-darker.min.css">
   <link rel="stylesheet" href="fonts/carino-fonts.css">
   <style>
     html, body { height: 100%; }
@@ -101,6 +102,93 @@
       color: #e5e5e5; margin: 0 0 0.7rem; text-transform: uppercase;
     }
     .modules-section h3.sub { margin-top: 1.3rem; }
+    .modules-section h3 + .tpl-hint { margin-top: -0.3rem; }
+
+    /* ---- file tabs: networkd and NM emit several files, netplan one ---- */
+    .file-tabs {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      margin-bottom: 6px; flex-shrink: 0;
+    }
+    .file-tabs:empty { display: none; }
+    .file-tab {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem;
+      background: #0f0f0f; border: 1px solid #262626; color: #8a8a8a;
+      padding: 5px 9px; border-radius: 4px 4px 0 0; cursor: pointer;
+      transition: 0.15s; white-space: nowrap; max-width: 100%;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .file-tab:hover { border-color: #eab308; color: #eab308; }
+    .file-tab.active { background: #eab308; border-color: #eab308; color: #050505; font-weight: 700; }
+    .file-tab .dir { opacity: 0.55; }
+    .eval-btn { margin-top: 0.4rem; border-style: dashed !important; }
+
+    /* ---- Evaluate overlay ---- */
+    .eval-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+      display: none; align-items: center; justify-content: center;
+      z-index: 2147483002; padding: 24px;
+    }
+    .eval-overlay.open { display: flex; }
+    .eval-box {
+      background: #0b0b0b; border: 1px solid rgba(234,179,8,0.45); border-radius: 8px;
+      width: min(980px, 100%); max-height: 88vh; padding: 26px 28px 22px;
+      position: relative; display: flex; flex-direction: column; min-height: 0;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+    }
+    .eval-close {
+      position: absolute; top: 12px; right: 14px; background: transparent;
+      border: none; color: #8a8a8a; font-size: 1.6rem; line-height: 1;
+      cursor: pointer; padding: 0 4px;
+    }
+    .eval-close:hover { color: #eab308; }
+    .eval-box h2 {
+      font-family: 'Red Hat Display', sans-serif; font-size: 1.25rem; font-weight: 900;
+      color: #fff; margin: 0 0 10px;
+    }
+    .eval-lede {
+      font-size: 0.82rem; line-height: 1.6; color: #b5b5b5; margin: 0 0 16px;
+      border-left: 2px solid #eab308; padding-left: 12px;
+    }
+    .eval-scroll { overflow-y: auto; min-height: 0; padding-right: 6px; }
+    .eval-h {
+      font-family: 'Red Hat Display', sans-serif; font-size: 0.78rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em; color: #e5e5e5;
+      margin: 22px 0 10px;
+    }
+    .eval-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    .eval-table th, .eval-table td {
+      text-align: left; padding: 7px 9px; border-bottom: 1px solid #1e1e1e;
+      vertical-align: top; line-height: 1.45;
+    }
+    .eval-table thead th {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.07em; color: #eab308; border-bottom: 1px solid #333;
+    }
+    .eval-table tbody th {
+      font-weight: 500; color: #8a8a8a; white-space: nowrap;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+    }
+    .eval-table td { color: #d4d4d4; }
+    .eval-table .yes { color: #86efac; }
+    .eval-table .no  { color: #fca5a5; }
+    .eval-verdict {
+      border: 1px solid #262626; border-radius: 6px; padding: 12px 14px; margin-bottom: 9px;
+    }
+    .eval-verdict .ev-case {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.07em; color: #6b6b6b;
+    }
+    .eval-verdict .ev-pick {
+      font-family: 'Red Hat Display', sans-serif; font-weight: 900; font-size: 1rem;
+      color: #eab308; margin: 2px 0 5px;
+    }
+    .eval-verdict .ev-why { font-size: 0.76rem; line-height: 1.55; color: #b5b5b5; }
+    .eval-gotchas { margin: 0; padding-left: 18px; }
+    .eval-gotchas li { font-size: 0.76rem; line-height: 1.6; color: #b5b5b5; margin-bottom: 8px; }
+    .eval-box code {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.92em;
+      background: #161616; border: 1px solid #262626; border-radius: 3px; padding: 1px 4px; color: #eab308;
+    }
     .tpl-hint {
       font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
       color: #6b6b6b; margin: -0.3rem 0 0.75rem; line-height: 1.4;
@@ -213,17 +301,26 @@
     <button onclick="validateYaml()" class="cs-btn">Validate</button>
     <button onclick="copyToClipboard()" class="cs-btn">Copy</button>
     <button onclick="downloadYaml()" class="cs-btn">Download</button>
+    <button onclick="downloadAll()" class="cs-btn" id="dlAllBtn" style="display:none">Download all</button>
   </div>
 </header>
 
 <div class="layout">
   <div class="editor-section">
+    <div id="fileTabs" class="file-tabs"></div>
     <textarea id="yamlEditor"></textarea>
     <div id="warnBox" class="warn" style="display: none;"></div>
     <div id="errorBox" class="error" style="display: none;"></div>
     <div id="successBox" class="success" style="display: none;">✔ No problems found.</div>
   </div>
   <div class="modules-section">
+    <h3>Backend</h3>
+    <div class="tpl-hint" id="backendHint"></div>
+    <button class="template-button active" data-be="netplan"  onclick="setBackend('netplan')">Netplan</button>
+    <button class="template-button"        data-be="networkd" onclick="setBackend('networkd')">systemd-networkd</button>
+    <button class="template-button"        data-be="nm"       onclick="setBackend('nm')">NetworkManager</button>
+    <button class="template-button eval-btn" onclick="toggleEval()">⇄ Compare all three</button>
+
     <h3>Template</h3>
     <div class="tpl-hint" id="tplHint"></div>
     <button class="template-button active" data-tpl="full"      onclick="setTemplate('full')">Full Showcase</button>
@@ -253,9 +350,27 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/yaml/yaml.min.js"></script>
+<!-- Evaluate overlay: how the three actually compare -->
+<div id="evalOverlay" class="eval-overlay" onclick="if(event.target===this)toggleEval()">
+  <div class="eval-box">
+    <button class="eval-close" onclick="toggleEval()" title="Close">&times;</button>
+    <h2>Which one should run this machine?</h2>
+    <p class="eval-lede" id="evalLede"></p>
+    <div class="eval-scroll">
+      <table class="eval-table" id="evalTable"></table>
+      <h3 class="eval-h">Pick by what the box is</h3>
+      <div id="evalVerdicts"></div>
+      <h3 class="eval-h">Traps worth knowing</h3>
+      <ul class="eval-gotchas" id="evalGotchas"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/js-yaml-4.1.0.min.js"></script>
+<script src="vendor/codemirror-5.65.13.min.js"></script>
+<script src="vendor/codemirror-mode-yaml.min.js"></script>
+<script src="vendor/codemirror-mode-properties.min.js"></script>
+<script src="js/backends.js"></script>
 
 <script>
   const baseTemplate = `# Netplan configuration file
@@ -527,7 +642,26 @@ network:
     rebuildYamlFromModules();
   }
 
-  function rebuildYamlFromModules() {
+  // ---- backends ---------------------------------------------------------
+  // Netplan is rendered by the builders above; the other two come from
+  // js/backends.js. Both of those are multi-file, so the editor works on a
+  // list of files and the tab bar picks one — netplan just always has one.
+  const BACKENDS = {
+    netplan:  { hint: "One YAML file. A front-end: it generates networkd or NM config, then hands over." },
+    networkd: { hint: "Several INI units in /etc/systemd/network/. Smallest footprint — but no Wi-Fi association." },
+    nm:       { hint: "One keyfile per profile. Must be chmod 600 or NM silently ignores it." },
+  };
+  let currentBackend = "netplan";
+  let files = [];        // [{ path, mode, content }]
+  let activeFile = 0;
+
+  function activeModules() {
+    const s = new Set();
+    document.querySelectorAll('.module-button.active').forEach(b => s.add(b.dataset.type));
+    return s;
+  }
+
+  function buildNetplanFiles() {
     const custom = ifaces.length > 0;
     let fullYaml = baseTemplate;
     if (custom) fullYaml += buildInterfaces() + '\n';
@@ -538,9 +672,60 @@ network:
       if (custom && (t === "ethernets" || t === "wifis")) return;
       fullYaml += snippetFor(t) + '\n';
     });
-    editor.setValue(fullYaml);
+    return [{ path: "/etc/netplan/01-carino.yaml", mode: "yaml", content: fullYaml }];
+  }
+
+  function rebuildYamlFromModules() {
+    files = currentBackend === "netplan"
+      ? buildNetplanFiles()
+      : CarinoNet.render(currentBackend, {
+          full: currentTemplate === "full",
+          ref:  currentTemplate === "reference",
+          v4: fam4, v6: fam6,
+          modules: activeModules(),
+          ifaces: ifaces,
+        });
+    if (activeFile >= files.length) activeFile = 0;
+    renderTabs();
+    showFile(activeFile);
+    document.getElementById("dlAllBtn").style.display = files.length > 1 ? "" : "none";
     errorBox.style.display = "none";
     successBox.style.display = "none";
+  }
+
+  function renderTabs() {
+    const bar = document.getElementById("fileTabs");
+    bar.innerHTML = "";
+    if (files.length <= 1) return;      // single file — no need for a tab bar
+    files.forEach((f, i) => {
+      const b = document.createElement("button");
+      b.className = "file-tab" + (i === activeFile ? " active" : "");
+      const cut = f.path.lastIndexOf("/") + 1;
+      b.innerHTML = '<span class="dir">' + f.path.slice(0, cut) + '</span>' + f.path.slice(cut);
+      b.title = f.path;
+      b.onclick = () => showFile(i);
+      bar.appendChild(b);
+    });
+  }
+
+  function showFile(i) {
+    const f = files[i];
+    if (!f) return;
+    activeFile = i;
+    // .network/.nmconnection are INI — the properties mode highlights them.
+    editor.setOption("mode", f.mode === "yaml" ? "yaml" : "properties");
+    editor.setValue(f.content);
+    document.querySelectorAll(".file-tab").forEach((t, n) => t.classList.toggle("active", n === i));
+  }
+
+  function setBackend(b) {
+    if (!BACKENDS[b]) return;
+    currentBackend = b;
+    activeFile = 0;
+    document.getElementById("backendHint").textContent = BACKENDS[b].hint;
+    document.querySelectorAll(".template-button[data-be]").forEach(x =>
+      x.classList.toggle("active", x.dataset.be === b));
+    rebuildYamlFromModules();
   }
 
   function toggleModule(button) {
@@ -750,16 +935,34 @@ network:
       "(and/or <code>dhcp6: false</code>) when you assign a static address, or drop the static and let DHCP manage it.";
   }
 
+  // networkd units and NM keyfiles are INI, so js-yaml would happily accept
+  // nonsense there. Check the shape that actually matters instead: every
+  // line is a [Section] or a key=value, and no key floats outside a section.
+  function validateIni(text) {
+    let section = null;
+    const lines = text.split("\n");
+    for (let n = 0; n < lines.length; n++) {
+      const line = lines[n].trim();
+      if (!line || line[0] === "#" || line[0] === ";") continue;
+      if (/^\[[^\]]+\]$/.test(line)) { section = line; continue; }
+      if (!/^[A-Za-z0-9_.-]+\s*=/.test(line))
+        throw new Error(`line ${n + 1}: expected [Section] or key=value — got "${line}"`);
+      if (!section)
+        throw new Error(`line ${n + 1}: "${line}" sits outside any [Section]`);
+    }
+  }
+
   function validateYaml() {
     try {
       const content = editor.getValue();
-      jsyaml.load(content);
+      if (currentBackend === "netplan") jsyaml.load(content);
+      else validateIni(content);
       errorBox.style.display = "none";
       successBox.style.display = "block";
     } catch (e) {
       successBox.style.display = "none";
       errorBox.style.display = "block";
-      errorBox.textContent = `YAML Error: ${e.message}`;
+      errorBox.textContent = (currentBackend === "netplan" ? "YAML Error: " : "INI Error: ") + e.message;
     }
   }
 
@@ -767,24 +970,69 @@ network:
     navigator.clipboard.writeText(editor.getValue());
   }
 
-  function downloadYaml() {
-    const blob = new Blob([editor.getValue()], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
+  function saveBlob(text, name, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'netplan-config.yaml';
-    a.click();
+    a.href = url; a.download = name; a.click();
     URL.revokeObjectURL(url);
   }
 
-  // Live DHCP-vs-static analysis whenever the document changes (lightly debounced).
-  let analyzeTimer = null;
-  editor.on("change", () => {
-    clearTimeout(analyzeTimer);
-    analyzeTimer = setTimeout(analyzeConfig, 120);
+  function downloadYaml() {
+    const f = files[activeFile];
+    if (!f) return;
+    saveBlob(editor.getValue(), f.path.slice(f.path.lastIndexOf("/") + 1),
+             f.mode === "yaml" ? "text/yaml" : "text/plain");
+  }
+
+  // Several files can't be handed over as several downloads without the
+  // browser blocking them, so bundle with the destination path above each.
+  function downloadAll() {
+    const bundle = files.map(f =>
+      "# ==== " + f.path + " ====\n" + f.content.replace(/\n*$/, "\n")).join("\n");
+    saveBlob(bundle, currentBackend + "-configs.txt", "text/plain");
+  }
+
+  // ---- Evaluate panel ---------------------------------------------------
+  function buildEvalPanel() {
+    const E = CarinoNet.EVAL;
+    document.getElementById("evalLede").innerHTML = E.lede;
+    const t = document.getElementById("evalTable");
+    t.innerHTML =
+      "<thead><tr><th></th><th>Netplan</th><th>systemd-networkd</th><th>NetworkManager</th></tr></thead><tbody>" +
+      E.rows.map(r =>
+        "<tr><th>" + r[0] + "</th><td>" + r[1] + "</td><td>" + r[2] + "</td><td>" + r[3] + "</td></tr>"
+      ).join("") + "</tbody>";
+    document.getElementById("evalVerdicts").innerHTML = E.verdicts.map(v =>
+      '<div class="eval-verdict"><div class="ev-case">' + v[0] + '</div>' +
+      '<div class="ev-pick">' + v[1] + '</div><div class="ev-why">' + v[2] + '</div></div>'
+    ).join("");
+    document.getElementById("evalGotchas").innerHTML =
+      E.gotchas.map(g => "<li>" + g + "</li>").join("");
+  }
+
+  function toggleEval() {
+    document.getElementById("evalOverlay").classList.toggle("open");
+  }
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") document.getElementById("evalOverlay").classList.remove("open");
   });
 
+  // Live DHCP-vs-static analysis whenever the document changes (lightly debounced).
+  // Keep hand edits so switching file tabs doesn't discard them.
+  let analyzeTimer = null;
+  editor.on("change", () => {
+    if (files[activeFile]) files[activeFile].content = editor.getValue();
+    clearTimeout(analyzeTimer);
+    // The analyzer parses netplan YAML; it has nothing to say about INI units.
+    analyzeTimer = setTimeout(() => {
+      if (currentBackend === "netplan") analyzeConfig();
+      else warnBox.style.display = "none";
+    }, 120);
+  });
+
+  buildEvalPanel();
   renderIfaces();
+  setBackend("netplan");
   setTemplate("full");
 </script>
 
