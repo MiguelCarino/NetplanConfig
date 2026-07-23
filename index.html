@@ -69,14 +69,17 @@
       cursor: pointer; transition: 0.2s; white-space: nowrap;
     }
     .cs-btn:hover { border-color: #eab308 !important; color: #eab308 !important; background: rgba(234,179,8,0.05) !important; }
+    /* Beats the .cs-btn `display:flex !important` base, which an inline
+       display:none can't (an !important stylesheet rule outranks inline). */
+    .cs-btn.hidden { display: none !important; }
 
     .layout {
       flex: 1;
       min-height: 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 1rem;
-      padding: 1.25rem;
+      gap: 0;
+      padding: 0;          /* editor + sidebar span the full page height */
       align-items: stretch;
     }
 
@@ -86,23 +89,40 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
+      position: relative;  /* containing block for the hovering toasts */
+      padding: 0.7rem;
     }
     .modules-section {
       flex: 1;
-      min-width: 240px;
-      max-width: 320px;
+      min-width: 250px;
+      max-width: 330px;
       min-height: 0;
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
+      overflow: hidden;   /* the sidebar itself never scrolls */
+      padding: 1rem;
+      border-right: 1px solid #262626;
     }
     .modules-section h3 {
       font-family: 'Red Hat Display', sans-serif;
-      font-size: 0.9rem; font-weight: 700; letter-spacing: 0.04em;
-      color: #e5e5e5; margin: 0 0 0.7rem; text-transform: uppercase;
+      font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em;
+      color: #e5e5e5; margin: 0 0 0.5rem; text-transform: uppercase;
     }
-    .modules-section h3.sub { margin-top: 1.3rem; }
-    .modules-section h3 + .tpl-hint { margin-top: -0.3rem; }
+    .modules-section h3.sub { margin-top: 0.9rem; }
+    .modules-section h3 + .tpl-hint { margin-top: -0.2rem; }
+
+    /* Backend selection as a compact 3-up grid. */
+    .backend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem; margin-bottom: 0.5rem; }
+    .backend-grid .template-button {
+      margin-bottom: 0; text-align: center; padding: 0.5rem 0.2rem;
+      font-size: 0.6rem; line-height: 1.15; word-break: break-word;
+    }
+
+    /* Interfaces take the remaining height; only their LIST scrolls, so the
+       fixed controls above stay put and the sidebar never scrolls. */
+    .iface-region { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+    .iface-region #ifaceList { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-bottom: 0.5rem; }
+    .iface-region #addIfaceBtn { flex: 0 0 auto; }
 
     /* ---- file tabs: networkd and NM emit several files, netplan one ---- */
     .file-tabs {
@@ -205,21 +225,33 @@
     }
     .CodeMirror-scroll { overflow-y: auto !important; }
 
+    /* Hovering notifications: a stack floating over the editor's lower-right,
+       so alerts never shrink the editor. */
+    .toast-stack {
+      position: fixed; right: 1.5rem; bottom: 1.5rem; left: auto;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 0.6rem;
+      pointer-events: none; z-index: 60; max-width: min(500px, calc(100vw - 3rem));
+    }
     .error, .success, .warn {
-      flex: 0 0 auto;
-      padding: 0.7rem 0.85rem;
-      margin-top: 0.75rem;
-      border-radius: 6px;
+      pointer-events: auto;
+      max-width: min(500px, 100%);
+      padding: 0.7rem 0.9rem;
+      border-radius: 8px;
       font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       line-height: 1.5;
       border: 1px solid;
+      box-shadow: 0 14px 38px rgba(0,0,0,0.6);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      animation: toast-in 0.22s ease;
     }
-    .error { color:#fca5a5; background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.5); }
-    .success { color:#86efac; background:rgba(34,197,94,0.08); border-color:rgba(34,197,94,0.5); }
-    .warn { color:#fcd34d; background:rgba(234,179,8,0.08); border-color:rgba(234,179,8,0.45); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .error { color:#fca5a5; background:rgba(28,10,10,0.95); border-color:rgba(239,68,68,0.6); }
+    .success { color:#86efac; background:rgba(9,24,14,0.95); border-color:rgba(34,197,94,0.6); }
+    .warn { color:#fcd34d; background:rgba(26,22,6,0.95); border-color:rgba(234,179,8,0.6); }
     .warn code { background:#1a1a1a; padding:1px 5px; border-radius:3px; color:#fde68a; }
     .warn b { color:#fde68a; }
+    .warn .warn-sep { border:none; border-top:1px solid rgba(234,179,8,0.3); margin:0.6rem 0; }
 
     /* --- custom interface builder --- */
     .iface-card {
@@ -257,8 +289,59 @@
     .fam-row { display: flex; gap: 1.4rem; margin-bottom: 0.6rem; }
     .fam-row .if-chk { font-size: 0.72rem; }
     .if-wifi { display: flex; flex-direction: column; gap: 0.35rem; }
-    .module-button.superseded { opacity: 0.4; }
-    .module-button.superseded::after { content: " · custom"; font-size: 0.6rem; opacity: 0.8; }
+    .if-addroute {
+      background: transparent; border: 1px dashed #333; color: #a3a3a3;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      border-radius: 4px; padding: 0.3rem; cursor: pointer; width: 100%;
+    }
+    .if-addroute:hover { border-color: #eab308; color: #eab308; }
+    .if-routes { display: flex; flex-direction: column; gap: 0.3rem; }
+    .route-row { display: flex; gap: 0.3rem; align-items: center; }
+    .route-row .rt-to { flex: 2 1 0; min-width: 0; }
+    .route-row .rt-via { flex: 2 1 0; min-width: 0; }
+    .route-row .rt-metric { flex: 1 1 0; min-width: 0; }
+    .rt-onlink {
+      display: flex; align-items: center; gap: 0.25rem; flex: 0 0 auto;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: #a3a3a3; cursor: pointer;
+    }
+    .rt-onlink input { accent-color: #eab308; margin: 0; }
+    .rt-del {
+      background: transparent; border: 1px solid #262626; color: #888;
+      border-radius: 4px; cursor: pointer; width: 22px; height: 22px;
+      font-size: 0.9rem; line-height: 1; flex: 0 0 auto; padding: 0;
+    }
+    .rt-del:hover { border-color: #ef4444; color: #ef4444; }
+    /* Module node grid — a palette of device types, like the topology tool. */
+    .module-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem;
+      margin-bottom: 0.6rem;
+    }
+    .module-node {
+      display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+      background: #0d0d0d; border: 1px solid #262626; border-radius: 6px;
+      color: #a3a3a3; cursor: pointer; padding: 0.6rem 0.3rem;
+      font-family: 'IBM Plex Mono', monospace; transition: 0.15s;
+      position: relative; text-align: center;
+    }
+    .module-node svg { width: 24px; height: 24px; stroke: currentColor; fill: none;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .module-node .mn-label {
+      font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.1;
+    }
+    .module-node:hover { border-color: #eab308; color: #eab308; background: rgba(234,179,8,0.06); }
+    .module-node.active {
+      background: #eab308; border-color: #eab308; color: #050505; font-weight: 700;
+    }
+    .module-node.active:hover { background: #fbbf24; color: #050505; }
+    .module-node.active::after {
+      content: "✓"; position: absolute; top: 3px; right: 5px; font-size: 0.6rem; font-weight: 700;
+    }
+    .module-node.superseded { opacity: 0.4; }
+    .module-node.superseded .mn-label::after { content: " · custom"; opacity: 0.85; }
+
+    /* Template tier grid — 2×2 of verbosity/content presets. */
+    .template-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.45rem; margin-bottom: 0.6rem; }
+    .template-grid .template-button { margin-bottom: 0; text-align: center; padding: 0.55rem 0.4rem; }
 
     .module-button, .template-button {
       display: block;
@@ -292,16 +375,64 @@
       background: #fbbf24;
       color: #050505;
     }
+
+    /* ---- Sidebar on the LEFT, editor on the right ---- */
+    .modules-section { order: 1; }
+    .editor-section { order: 2; }
+
+    /* App action buttons: a flex row in the navbar on desktop. The ☰ drawer
+       toggle and the drawer "Actions" section are mobile-only. */
+    .nav-actions { display: flex; gap: 8px; align-items: center; }
+    .cs-menu { display: none !important; }
+    #mobileActionsSection { display: none; }
+    #sidebarScrim { display: none; }
+
+    /* ---- Mobile: sidebar becomes a slide-in drawer under the 60px navbar ---- */
+    @media (max-width: 860px) {
+      .modules-section {
+        position: fixed; top: 60px; left: 0; bottom: 0;
+        width: min(340px, 86vw); max-width: none; z-index: 1500;
+        transform: translateX(-100%); transition: transform 0.25s ease;
+        overflow-y: auto; background: #0a0a0a;
+        border-right: 1px solid #262626; box-shadow: 6px 0 24px rgba(0,0,0,0.6);
+        padding: 1rem 1rem 1.5rem;
+      }
+      .modules-section.open { transform: translateX(0); }
+      /* Whole drawer scrolls on mobile — drop the inner interface-list scroll. */
+      .iface-region { flex: 0 0 auto; }
+      .iface-region #ifaceList { overflow: visible; flex: 0 0 auto; }
+      .editor-section { order: 1; min-width: 0; }
+      .layout { padding: 0.75rem; gap: 0; }
+
+      #sidebarScrim {
+        display: block; position: fixed; inset: 60px 0 0 0;
+        background: rgba(0,0,0,0.55); z-index: 1400;
+        opacity: 0; pointer-events: none; transition: opacity 0.25s;
+      }
+      #sidebarScrim.open { opacity: 1; pointer-events: auto; }
+
+      /* Navbar keeps only the ☰ toggle; the real actions move into the drawer's
+         "Actions" section (relocated by syncNavActions), laid out as a grid. */
+      .cs-menu { display: inline-flex !important; }
+      #mobileActionsSection { display: block; }
+      .sidebar-actions .nav-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.45rem; }
+      .sidebar-actions .cs-btn { width: 100% !important; justify-content: center !important; height: 34px !important; }
+    }
+    /* Tiny phones: shed the social icons so the ☰ + common items stay roomy. */
+    @media (max-width: 520px) { #carinoNav .social-row { display: none; } }
   </style>
 </head>
 <body>
 
 <header class="cs-header">
   <div class="cs-right">
-    <button onclick="validateYaml()" class="cs-btn">Validate</button>
-    <button onclick="copyToClipboard()" class="cs-btn">Copy</button>
-    <button onclick="downloadYaml()" class="cs-btn">Download</button>
-    <button onclick="downloadAll()" class="cs-btn" id="dlAllBtn" style="display:none">Download all</button>
+    <button onclick="toggleSidebar()" class="cs-btn cs-menu" title="Show controls" aria-label="Show controls">☰ Controls</button>
+    <span id="navActions" class="nav-actions">
+      <button onclick="validateYaml()" class="cs-btn" title="Validate">Validate</button>
+      <button onclick="copyToClipboard()" class="cs-btn" title="Copy">Copy</button>
+      <button onclick="downloadYaml()" class="cs-btn" title="Download">Download</button>
+      <button onclick="downloadAll()" class="cs-btn hidden" id="dlAllBtn" title="Download all">Download all</button>
+    </span>
   </div>
 </header>
 
@@ -309,46 +440,57 @@
   <div class="editor-section">
     <div id="fileTabs" class="file-tabs"></div>
     <textarea id="yamlEditor"></textarea>
-    <div id="warnBox" class="warn" style="display: none;"></div>
-    <div id="errorBox" class="error" style="display: none;"></div>
-    <div id="successBox" class="success" style="display: none;">✔ No problems found.</div>
+    <div class="toast-stack">
+      <div id="warnBox" class="warn" style="display: none;"></div>
+      <div id="errorBox" class="error" style="display: none;"></div>
+      <div id="successBox" class="success" style="display: none;">✔ No problems found.</div>
+    </div>
   </div>
   <div class="modules-section">
+    <div id="mobileActionsSection">
+      <h3>Actions</h3>
+      <div id="mobileActions" class="sidebar-actions"></div>
+    </div>
+
     <h3>Backend</h3>
     <div class="tpl-hint" id="backendHint"></div>
-    <button class="template-button active" data-be="netplan"  onclick="setBackend('netplan')">Netplan</button>
-    <button class="template-button"        data-be="networkd" onclick="setBackend('networkd')">systemd-networkd</button>
-    <button class="template-button"        data-be="nm"       onclick="setBackend('nm')">NetworkManager</button>
+    <div class="backend-grid">
+      <button class="template-button active" data-be="netplan"  onclick="setBackend('netplan')">Netplan</button>
+      <button class="template-button"        data-be="networkd" onclick="setBackend('networkd')">networkd</button>
+      <button class="template-button"        data-be="nm"       onclick="setBackend('nm')">Network<wbr>Manager</button>
+    </div>
     <button class="template-button eval-btn" onclick="toggleEval()">⇄ Compare all three</button>
 
     <h3>Template</h3>
     <div class="tpl-hint" id="tplHint"></div>
-    <button class="template-button active" data-tpl="full"      onclick="setTemplate('full')">Full Showcase</button>
-    <button class="template-button"        data-tpl="simple"    onclick="setTemplate('simple')">Simple</button>
-    <button class="template-button"        data-tpl="reference" onclick="setTemplate('reference')">Simple + Full Comments</button>
+    <div class="template-grid" id="templateGrid"></div>
 
     <h3 class="sub">Address families</h3>
-    <div class="tpl-hint">Toggle IPv4 / IPv6 lines across every config — templates and custom interfaces.</div>
     <div class="fam-row">
       <label class="if-chk"><input type="checkbox" id="famV4" checked onchange="setFamily()"> IPv4</label>
-      <label class="if-chk"><input type="checkbox" id="famV6" checked onchange="setFamily()"> IPv6</label>
+      <label class="if-chk"><input type="checkbox" id="famV6" onchange="setFamily()"> IPv6</label>
     </div>
 
     <h3 class="sub">Modules</h3>
-    <button class="module-button active" data-type="ethernets" onclick="toggleModule(this)">Ethernets</button>
-    <button class="module-button active" data-type="wifis" onclick="toggleModule(this)">Wi-Fi</button>
-    <button class="module-button active" data-type="bridges" onclick="toggleModule(this)">Bridge</button>
-    <button class="module-button active" data-type="vlans" onclick="toggleModule(this)">VLAN</button>
-    <button class="module-button active" data-type="bonds" onclick="toggleModule(this)">Bond</button>
-    <button class="module-button active" data-type="tunnels" onclick="toggleModule(this)">Tunnels</button>
-    <button class="module-button active" data-type="veth" onclick="toggleModule(this)">Virtual Eth</button>
+    <div class="tpl-hint">Click a device type to include its example. Ethernet and Wi-Fi are on by default.</div>
+    <div class="module-grid" id="moduleGrid"></div>
 
-    <h3 class="sub">Interfaces</h3>
-    <div class="tpl-hint">Define your real NICs (enp1s0, eno1, wlp2s0…). Any rows here replace the Ethernets/Wi-Fi module examples.</div>
-    <div id="ifaceList"></div>
-    <button class="template-button" id="addIfaceBtn" onclick="addIface()">+ Add interface</button>
+    <h3 class="sub">Load an example</h3>
+    <select id="exampleSel" class="if-type" onchange="loadExample(this.value)" style="width:100%; padding:0.4rem;" title="A canonical netplan scenario — replaces your current setup, comparable across all three backends.">
+      <option value="">Load example…</option>
+    </select>
+
+    <div class="iface-region">
+      <h3 class="sub">Interfaces</h3>
+      <div class="tpl-hint">Your real NICs — replace the Ethernet/Wi-Fi examples.</div>
+      <div id="ifaceList"></div>
+      <button class="template-button" id="addIfaceBtn" onclick="addIface()">+ Add interface</button>
+    </div>
   </div>
 </div>
+
+<!-- Scrim behind the mobile controls drawer -->
+<div id="sidebarScrim" onclick="toggleSidebar()"></div>
 
 <!-- Evaluate overlay: how the three actually compare -->
 <div id="evalOverlay" class="eval-overlay" onclick="if(event.target===this)toggleEval()">
@@ -429,10 +571,11 @@ network:
     let s = "";
     if (addrs.length) s += L(b + "addresses: [" + addrs.join(", ") + "]", cm("static IP(s) in CIDR form — one or more, any family"));
     if (routes.length) {
-      s += L(b + "routes:", cm("default route(s): one per IP family — replaces gateway4/6"));
+      s += L(b + "routes:", cm("default + static routes — replaces the old gateway4/6"));
       routes.forEach(r => {
-        s += b + "  - to: default\n";
+        s += b + "  - to: " + (r.to || "default") + "\n";
         s += L(b + "    via: " + r.via, cm(r.note));
+        if (r.metric) s += L(b + "    metric: " + r.metric, cm("route priority — lower wins"));
       });
     }
     if (ns.length) {
@@ -445,10 +588,11 @@ network:
     return s;
   }
 
-  function bEthernets(full, v4, v6) {
+  function bEthernets(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     let s = "  # Ethernet interface — " + fam(v4, v6) + "\n  ethernets:\n    eth0:\n";
-    if (full) {
+    if (showcase) {
       s += L(b + "match:", "select the physical NIC by a stable attribute");
       s += L(b + '  macaddress: "00:11:22:33:44:55"', "bind this block to one card by its MAC");
       s += L(b + "set-name: lan0", "rename the matched device to a predictable name");
@@ -457,7 +601,12 @@ network:
     const addrs = [], routes = [], ns = [];
     if (v4) {
       s += L(b + "dhcp4: " + (full ? "no" : "true"), full ? "IPv4 via DHCP? 'no' = use the static address below" : "request an IPv4 address over DHCP");
-      if (full) { addrs.push("192.168.1.10/24"); routes.push({ via: "192.168.1.1", note: "IPv4 default gateway" }); ns.push("8.8.8.8", "8.8.4.4"); }
+      if (full) {
+        addrs.push("192.168.1.10/24");
+        routes.push({ via: "192.168.1.1", note: "IPv4 default gateway" });
+        routes.push({ to: "10.0.0.0/8", via: "192.168.1.254", metric: "100", note: "static route to another subnet (VPN, lab, DC…)" });
+        ns.push("8.8.8.8", "8.8.4.4");
+      }
     } else {
       s += L(b + "dhcp4: false", "IPv4 disabled on this interface");
     }
@@ -472,7 +621,8 @@ network:
     return s;
   }
 
-  function bWifis(full, v4, v6) {
+  function bWifis(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     let s = "  # Wi-Fi interface — " + fam(v4, v6) + "\n  wifis:\n    wlan0:\n";
     s += L(b + "access-points:", "SSIDs this interface may join");
@@ -488,7 +638,8 @@ network:
     return s;
   }
 
-  function bBridges(full, v4, v6) {
+  function bBridges(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     let s = "  # Bridge (software switch) — " + fam(v4, v6) + "\n  bridges:\n    br0:\n";
     s += L(b + "interfaces: [eth0, eth1]", "member ports enslaved to the bridge");
@@ -507,7 +658,7 @@ network:
     }
     s += dhcpOv(v4 ? !full : null, v6 ? !full : null, 100, 100);
     s += tail(addrs, routes, ns, v4, v6, false, full);
-    if (full) {
+    if (showcase) {
       s += L(b + "parameters:", "bridge (Spanning Tree) tuning");
       s += L(b + "  stp: true", "enable STP to prevent forwarding loops");
       s += L(b + "  forward-delay: 4", "seconds a port waits before it forwards");
@@ -515,7 +666,8 @@ network:
     return s;
   }
 
-  function bVlans(full, v4, v6) {
+  function bVlans(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     let s = "  # VLAN (802.1Q tagged sub-interface) — " + fam(v4, v6) + "\n  vlans:\n    vlan100:\n";
     s += L(b + "id: 100", "802.1Q VLAN tag, 1–4094");
@@ -524,17 +676,18 @@ network:
     if (v4) addrs.push("192.168.100.2/24");
     if (v6) addrs.push('"2001:db8:100::2/64"');
     s += tail(addrs, [], [], v4, v6, false, full);
-    if (full) s += L(b + "mtu: 1450", "trim MTU to leave room for the 4-byte VLAN tag");
+    if (showcase) s += L(b + "mtu: 1450", "trim MTU to leave room for the 4-byte VLAN tag");
     return s;
   }
 
-  function bBonds(full, v4, v6) {
+  function bBonds(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     let s = "  # Bond (link aggregation) — " + fam(v4, v6) + "\n  bonds:\n    bond0:\n";
     s += L(b + "interfaces: [eth0, eth1]", "physical links combined into the bond");
     s += L(b + "parameters:", "bonding behaviour (mode lives here, not at top level)");
     s += L(b + "  mode: active-backup", "one active link, rest standby (or balance-rr, 802.3ad)");
-    if (full) s += L(b + "  mii-monitor-interval: 100", "link-health poll interval in ms");
+    if (showcase) s += L(b + "  mii-monitor-interval: 100", "link-health poll interval in ms");
     if (v4) s += L(b + "dhcp4: true", "request an IPv4 address over DHCP");
     else    s += L(b + "dhcp4: false", "IPv4 disabled on the bond");
     if (v6) s += L(b + "dhcp6: true", "request an IPv6 address over DHCPv6");
@@ -545,7 +698,8 @@ network:
     return s;
   }
 
-  function bTunnels(full, v4, v6) {
+  function bTunnels(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     const v6only = v6 && !v4;
     let s = "  # GRE tunnel — " + (v6only ? "IPv6 transport (ip6gre)" : "IPv4 transport") + "\n  tunnels:\n    gre1:\n";
@@ -562,11 +716,12 @@ network:
     if (v4) addrs.push("10.1.1.1/30");
     if (v6) addrs.push('"fd00:1::1/64"');
     s += tail(addrs, [], [], v4, v6, false, full);
-    if (full) s += L(b + "ttl: 64", "TTL / hop-limit stamped on encapsulated packets");
+    if (showcase) s += L(b + "ttl: 64", "TTL / hop-limit stamped on encapsulated packets");
     return s;
   }
 
-  function bVeth(full, v4, v6) {
+  function bVeth(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
     const b = "      ";
     let s = "  # Virtual Ethernet pair (veth) — " + fam(v4, v6) + "\n  virtual-ethernets:\n";
     s += "    veth-host:\n";
@@ -580,17 +735,52 @@ network:
     return s;
   }
 
+  function bDummy(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
+    const b = "      ";
+    let s = "  # Dummy device — an always-up virtual NIC for service / anycast IPs\n  dummy-devices:\n    dm0:\n";
+    const addrs = [];
+    if (v4) addrs.push("10.10.10.1/32");
+    if (v6) addrs.push('"fd00:d0::1/128"');
+    s += L(b + "addresses: [" + addrs.join(", ") + "]", full && "stays up with no physical link — bind services here");
+    return s;
+  }
+
+  function bVrf(full, v4, v6, showcase) {
+    if (showcase === undefined) showcase = full;
+    const b = "      ";
+    let s = "  # VRF — a separate routing table bound to a set of interfaces\n  vrfs:\n    vrf-blue:\n";
+    s += L(b + "table: 100", full && "the routing table this VRF owns");
+    s += L(b + "interfaces: [ eth0 ]", full && "member links enslaved to this VRF");
+    s += L(b + "routes:", full && "routes installed in the VRF's own table (100)");
+    s += b + "  - to: default\n";
+    s += L(b + "    via: " + (v4 ? "10.0.0.1" : '"fd00::1"'), full && "gateway reachable inside the VRF");
+    return s;
+  }
+
   const MODULE_BUILDERS = {
     ethernets: bEthernets, wifis: bWifis, bridges: bBridges,
     vlans: bVlans, bonds: bBonds, tunnels: bTunnels, veth: bVeth,
+    dummy: bDummy, vrf: bVrf,
   };
   const TEMPLATES = {
-    full:      { hint: "Full showcase — every option, ready to trim." },
-    simple:    { hint: "Minimal working config (DHCP)." },
-    reference: { hint: "Simple config + every full option as comments — enable later, no revisit." },
+    simple:    { label: "Simple",    hint: "Minimal working config (DHCP), no comments." },
+    reference: { label: "Simple + Comments", hint: "Simple config + every full option as comments — enable later, no revisit." },
+    it:        { label: "IT",        hint: "Practical config: static IP, gateway, DNS and static routes — the common cases, commented." },
+    full:      { label: "Full",      hint: "Full showcase — every option including MAC match, set-name, MTU and tuning knobs." },
   };
-  let currentTemplate = "full";
-  let fam4 = true, fam6 = true;   // active address families (checkboxes)
+  // A tier resolves to two flags: `full` (practical static content + inline
+  // comments) and `showcase` (the rare/exhaustive knobs on top). "reference" is
+  // handled specially — a simple body with the full showcase appended as comments.
+  const TIER = {
+    simple:    { full: false, showcase: false, ref: false },
+    reference: { full: false, showcase: false, ref: true },
+    it:        { full: true,  showcase: false, ref: false },
+    full:      { full: true,  showcase: true,  ref: false },
+  };
+  function tier() { return TIER[currentTemplate] || TIER.full; }
+  let currentTemplate = "it";
+  let fam4 = true, fam6 = false;   // active address families (checkboxes) — IPv4-only by default
 
   const editor = CodeMirror.fromTextArea(document.getElementById("yamlEditor"), {
     mode: "yaml",
@@ -615,19 +805,39 @@ network:
   function snippetFor(type) {
     const build = MODULE_BUILDERS[type];
     if (!build) return "";
-    if (currentTemplate === "reference") {
-      return build(false, fam4, fam6) +
+    const t = tier();
+    if (t.ref) {   // Simple + Comments: a simple body, full showcase appended as comments
+      return build(false, fam4, fam6, false) +
         "  # ---- full reference (uncomment as needed) ----\n" +
-        commentOut(build(true, fam4, fam6));
+        commentOut(build(true, fam4, fam6, true));
     }
-    return build(currentTemplate === "full", fam4, fam6);
+    return build(t.full, fam4, fam6, t.showcase);
+  }
+
+  // Template tiers rendered as a 2×2 node grid, in the intended progression.
+  const TEMPLATE_ORDER = ["simple", "reference", "it", "full"];
+  function renderTemplateGrid() {
+    const grid = document.getElementById("templateGrid");
+    grid.innerHTML = "";
+    TEMPLATE_ORDER.forEach(k => {
+      const b = document.createElement("button");
+      b.className = "template-button" + (k === currentTemplate ? " active" : "");
+      b.dataset.tpl = k;
+      b.textContent = TEMPLATES[k].label;
+      b.title = TEMPLATES[k].hint;
+      b.addEventListener("click", () => setTemplate(k));
+      grid.appendChild(b);
+    });
   }
 
   function setTemplate(name) {
     if (!TEMPLATES[name]) return;
     currentTemplate = name;
     tplHint.textContent = TEMPLATES[name].hint;
-    document.querySelectorAll(".template-button").forEach(b =>
+    // Scope to the verbosity buttons only — the backend selector and the eval
+    // button share the .template-button class, so an unscoped query would strip
+    // `active` off whichever backend is selected.
+    document.querySelectorAll(".template-button[data-tpl]").forEach(b =>
       b.classList.toggle("active", b.dataset.tpl === name));
     rebuildYamlFromModules();
   }
@@ -657,7 +867,7 @@ network:
 
   function activeModules() {
     const s = new Set();
-    document.querySelectorAll('.module-button.active').forEach(b => s.add(b.dataset.type));
+    document.querySelectorAll('.module-node.active').forEach(b => s.add(b.dataset.type));
     return s;
   }
 
@@ -665,7 +875,7 @@ network:
     const custom = ifaces.length > 0;
     let fullYaml = baseTemplate;
     if (custom) fullYaml += buildInterfaces() + '\n';
-    document.querySelectorAll('.module-button.active').forEach(btn => {
+    document.querySelectorAll('.module-node.active').forEach(btn => {
       const t = btn.dataset.type;
       // Custom interfaces own the ethernets:/wifis: blocks — don't emit the
       // example modules too, or we'd get a duplicate top-level key.
@@ -676,11 +886,11 @@ network:
   }
 
   function rebuildYamlFromModules() {
+    const t = tier();
     files = currentBackend === "netplan"
       ? buildNetplanFiles()
       : CarinoNet.render(currentBackend, {
-          full: currentTemplate === "full",
-          ref:  currentTemplate === "reference",
+          full: t.full, ref: t.ref, showcase: t.showcase,
           v4: fam4, v6: fam6,
           modules: activeModules(),
           ifaces: ifaces,
@@ -688,7 +898,7 @@ network:
     if (activeFile >= files.length) activeFile = 0;
     renderTabs();
     showFile(activeFile);
-    document.getElementById("dlAllBtn").style.display = files.length > 1 ? "" : "none";
+    document.getElementById("dlAllBtn").classList.toggle("hidden", files.length <= 1);
     errorBox.style.display = "none";
     successBox.style.display = "none";
   }
@@ -701,7 +911,13 @@ network:
       const b = document.createElement("button");
       b.className = "file-tab" + (i === activeFile ? " active" : "");
       const cut = f.path.lastIndexOf("/") + 1;
-      b.innerHTML = '<span class="dir">' + f.path.slice(0, cut) + '</span>' + f.path.slice(cut);
+      // Built from text nodes, not innerHTML: the filename carries the
+      // user-typed interface name, which must never be parsed as markup.
+      const dir = document.createElement("span");
+      dir.className = "dir";
+      dir.textContent = f.path.slice(0, cut);
+      b.appendChild(dir);
+      b.appendChild(document.createTextNode(f.path.slice(cut)));
       b.title = f.path;
       b.onclick = () => showFile(i);
       bar.appendChild(b);
@@ -728,9 +944,139 @@ network:
     rebuildYamlFromModules();
   }
 
+  // Module palette — a device-type grid, rendered like the topology tool's
+  // node palette (icon + label). `on` sets the default selection: ethernet and
+  // Wi-Fi only. The SVGs inherit the card colour via stroke:currentColor.
+  const MODULE_DEFS = [
+    { type: "ethernets", name: "Ethernet", on: true,
+      icon: '<rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7 7V4.5M12 7V4.5M17 7V4.5"/>' },
+    { type: "wifis", name: "Wi-Fi", on: true,
+      icon: '<path d="M4.5 11a11 11 0 0 1 15 0"/><path d="M8 14.5a6 6 0 0 1 8 0"/><circle cx="12" cy="18" r="1"/>' },
+    { type: "bridges", name: "Bridge", on: false,
+      icon: '<rect x="3" y="11" width="18" height="7" rx="1.5"/><path d="M7 11V7.5M17 11V7.5M7 7.5h10"/>' },
+    { type: "vlans", name: "VLAN", on: false,
+      icon: '<path d="M3 12l6-6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9z"/><circle cx="15.5" cy="12" r="1.4"/>' },
+    { type: "bonds", name: "Bond", on: false,
+      icon: '<path d="M3 9h9M3 15h9"/><path d="M12 9c4 0 4 6 8 6M12 15c4 0 4-6 8-6"/>' },
+    { type: "tunnels", name: "Tunnel", on: false,
+      icon: '<path d="M4 20v-8a8 8 0 0 1 16 0v8"/><path d="M9 20v-7a3 3 0 0 1 6 0v7"/>' },
+    { type: "veth", name: "Virtual Eth", on: false,
+      icon: '<circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/>' },
+    { type: "dummy", name: "Dummy", on: false,
+      icon: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><path d="M12 8.5v7M8.5 12h7"/>' },
+    { type: "vrf", name: "VRF", on: false,
+      icon: '<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 10v4"/>' },
+  ];
+
+  function renderModuleGrid() {
+    const grid = document.getElementById("moduleGrid");
+    grid.innerHTML = "";
+    MODULE_DEFS.forEach(d => {
+      const btn = document.createElement("button");
+      btn.className = "module-node" + (d.on ? " active" : "");
+      btn.dataset.type = d.type;
+      btn.title = d.name;
+      btn.innerHTML = '<svg viewBox="0 0 24 24">' + d.icon + '</svg>' +
+                      '<span class="mn-label">' + d.name + '</span>';
+      btn.addEventListener("click", () => toggleModule(btn));
+      grid.appendChild(btn);
+    });
+  }
+
   function toggleModule(button) {
     button.classList.toggle("active");
     rebuildYamlFromModules();
+  }
+
+  // Mobile controls drawer: slide the sidebar in/out, dim the editor behind it.
+  function toggleSidebar(force) {
+    const sb = document.querySelector(".modules-section");
+    const sc = document.getElementById("sidebarScrim");
+    const open = force === undefined ? !sb.classList.contains("open") : force;
+    sb.classList.toggle("open", open);
+    sc.classList.toggle("open", open);
+  }
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") toggleSidebar(false);
+  });
+
+  // The extra navbar actions (Validate/Copy/Download…) live in the navbar on
+  // desktop, but move to the drawer's "Actions" section on mobile. carino-navbar
+  // .js parks them (with the ☰) in the navbar; this relocates just the actions.
+  const mqMobile = window.matchMedia("(max-width: 860px)");
+  function syncNavActions() {
+    const acts = document.getElementById("navActions");
+    if (!acts) return;
+    if (mqMobile.matches) {
+      document.getElementById("mobileActions").appendChild(acts);
+    } else {
+      const menu = document.querySelector(".cs-menu");   // sits in the navbar actions
+      if (menu && menu.parentNode) menu.parentNode.appendChild(acts);
+    }
+  }
+  // Run after the shared navbar has assembled itself (deferred script → on load).
+  window.addEventListener("load", syncNavActions);
+  mqMobile.addEventListener("change", () => { syncNavActions(); toggleSidebar(false); });
+
+  // ---- example scenarios -----------------------------------------------
+  // Each maps a netplan-examples-style scenario onto the builder's own state
+  // (families + active modules + interface rows), then renders it across all
+  // three backends. `ifaces` entries are partial; loadExample fills defaults.
+  const SCENARIOS = {
+    dhcp:   { label: "DHCP client (simplest)", fam: [true, true], modules: [],
+              ifaces: [{ name: "enp1s0", dhcp4: true }] },
+    static: { label: "Static IP + DNS", fam: [true, false], modules: [],
+              ifaces: [{ name: "enp1s0", addr: "192.168.1.10/24", gw: "192.168.1.1",
+                         dns: "1.1.1.1 8.8.8.8", search: "corp.example" }] },
+    dualstatic: { label: "Static dual-stack (IPv4 + IPv6)", fam: [true, true], modules: [],
+              ifaces: [{ name: "enp1s0", addr: "192.168.1.10/24 2001:db8::10/64",
+                         gw: "192.168.1.1", dns: "1.1.1.1 2606:4700:4700::1111" }] },
+    onlink: { label: "Directly-connected gateway (on-link)", fam: [true, false], modules: [],
+              ifaces: [{ name: "ens3", addr: "10.0.0.10/32",
+                         routes: [{ to: "default", via: "192.168.0.1", metric: "", onlink: true }] }] },
+    routes: { label: "Extra static routes", fam: [true, false], modules: [],
+              ifaces: [{ name: "enp1s0", addr: "192.168.1.10/24", gw: "192.168.1.1",
+                         routes: [{ to: "10.0.0.0/8", via: "192.168.1.254", metric: "100", onlink: false },
+                                  { to: "172.16.0.0/12", via: "192.168.1.254", metric: "100", onlink: false }] }] },
+    router: { label: "Two ports, same range (policy routing)", fam: [true, false], modules: [],
+              ifaces: [{ name: "eth0", addr: "192.168.1.1/24", gw: "192.168.1.254" },
+                       { name: "eth1", addr: "192.168.1.2/24", gw: "192.168.1.254" }] },
+    wifi:   { label: "Wi-Fi client", fam: [true, false], modules: [],
+              ifaces: [{ name: "wlp2s0", type: "wifi", dhcp4: true, ssid: "MyNetwork", psk: "wifipassword" }] },
+    bridge: { label: "Bridge for VMs / containers", fam: [true, false], modules: ["bridges"], ifaces: [] },
+    bond:   { label: "Bonded server (LACP)", fam: [true, false], modules: ["bonds"], ifaces: [] },
+    vlan:   { label: "VLAN trunk", fam: [true, false], modules: ["vlans"], ifaces: [] },
+    vrf:    { label: "VRF (isolated routing table)", fam: [true, false], modules: ["vrf"], ifaces: [] },
+  };
+
+  function populateExamples() {
+    const sel = document.getElementById("exampleSel");
+    Object.keys(SCENARIOS).forEach(k => {
+      const o = document.createElement("option");
+      o.value = k; o.textContent = SCENARIOS[k].label;
+      sel.appendChild(o);
+    });
+  }
+
+  function loadExample(key) {
+    const sel = document.getElementById("exampleSel");
+    const sc = SCENARIOS[key];
+    if (!sc) { if (sel) sel.value = ""; return; }
+    const dirty = ifaces.length || document.querySelectorAll('.module-node.active').length;
+    if (dirty && !confirm('Load “' + sc.label + '”?\nThis replaces your current interfaces and module selection.')) {
+      sel.value = ""; return;
+    }
+    document.getElementById("famV4").checked = fam4 = sc.fam[0];
+    document.getElementById("famV6").checked = fam6 = sc.fam[1];
+    document.querySelectorAll('.module-node').forEach(b =>
+      b.classList.toggle("active", sc.modules.indexOf(b.dataset.type) >= 0));
+    ifaces = sc.ifaces.map(i => Object.assign(
+      { name: "enp1s0", type: "ethernet", dhcp4: false, dhcp6: false,
+        addr: "", gw: "", dns: "", search: "", routes: [], ssid: "MyWiFi", psk: "mypassword" },
+      i, { routes: (i.routes || []).map(r => Object.assign({}, r)) }));
+    renderIfaces();
+    rebuildYamlFromModules();
+    sel.value = "";
   }
 
   // ---- custom interface builder ----------------------------------------
@@ -749,11 +1095,38 @@ network:
 
   function addIface() {
     ifaces.push({ name: suggestName("ethernet"), type: "ethernet",
-                  dhcp4: true, dhcp6: false, addr: "", ssid: "MyWiFi", psk: "mypassword" });
+                  dhcp4: true, dhcp6: false, addr: "", gw: "", dns: "", search: "",
+                  routes: [], ssid: "MyWiFi", psk: "mypassword" });
     renderIfaces();
     rebuildYamlFromModules();
   }
   function removeIface(idx) { ifaces.splice(idx, 1); renderIfaces(); rebuildYamlFromModules(); }
+
+  // Render the static-route rows for one interface into `box`.
+  function renderRoutes(box, it) {
+    box.innerHTML = "";
+    (it.routes || []).forEach((r, k) => {
+      const row = document.createElement("div");
+      row.className = "route-row";
+      row.innerHTML =
+        '<input type="text" class="rt-to"  placeholder="to, e.g. 10.0.0.0/8">' +
+        '<input type="text" class="rt-via" placeholder="via">' +
+        '<input type="text" class="rt-metric" placeholder="metric">' +
+        '<label class="rt-onlink" title="gateway is directly reachable (not on this subnet)"><input type="checkbox"> on-link</label>' +
+        '<button type="button" class="rt-del" title="Remove route">&times;</button>';
+      const $ = (s) => row.querySelector(s);
+      $(".rt-to").value = r.to || "";
+      $(".rt-via").value = r.via || "";
+      $(".rt-metric").value = r.metric || "";
+      $(".rt-onlink input").checked = !!r.onlink;
+      $(".rt-to").addEventListener("input", (e) => { r.to = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".rt-via").addEventListener("input", (e) => { r.via = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".rt-metric").addEventListener("input", (e) => { r.metric = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".rt-onlink input").addEventListener("change", (e) => { r.onlink = e.target.checked; rebuildYamlFromModules(); });
+      $(".rt-del").addEventListener("click", () => { it.routes.splice(k, 1); renderIfaces(); rebuildYamlFromModules(); });
+      box.appendChild(row);
+    });
+  }
 
   function renderIfaces() {
     const list = document.getElementById("ifaceList");
@@ -771,7 +1144,12 @@ network:
           '<label class="if-chk"><input type="checkbox" class="if-d4"> DHCPv4</label>' +
           '<label class="if-chk"><input type="checkbox" class="if-d6"> DHCPv6</label>' +
         '</div>' +
-        '<input type="text" class="if-addr" placeholder="static address, e.g. 192.168.1.10/24">' +
+        '<input type="text" class="if-addr" placeholder="static address(es), e.g. 192.168.1.10/24">' +
+        '<input type="text" class="if-gw" placeholder="gateway (optional), e.g. 192.168.1.1">' +
+        '<input type="text" class="if-dns" placeholder="DNS (optional), e.g. 1.1.1.1 8.8.8.8">' +
+        '<input type="text" class="if-search" placeholder="search domains (optional), e.g. corp.example">' +
+        '<div class="if-routes"></div>' +
+        '<button type="button" class="if-addroute">+ static route</button>' +
         '<div class="if-wifi">' +
           '<input type="text" class="if-ssid" placeholder="Wi-Fi SSID">' +
           '<input type="text" class="if-psk" placeholder="Wi-Fi password">' +
@@ -783,16 +1161,31 @@ network:
       $(".if-d4").checked = it.dhcp4;
       $(".if-d6").checked = it.dhcp6;
       $(".if-addr").value = it.addr;
+      $(".if-gw").value = it.gw || "";
+      $(".if-dns").value = it.dns || "";
+      $(".if-search").value = it.search || "";
       $(".if-ssid").value = it.ssid;
       $(".if-psk").value  = it.psk;
       $(".if-wifi").style.display = it.type === "wifi" ? "flex" : "none";
+      // The gateway/DNS only mean anything alongside a static address.
+      const hasAddr = () => CarinoNet.addrsOf(it.addr).length > 0;
+      const toggleStaticFields = () => {
+        const d = hasAddr() ? "block" : "none";
+        $(".if-gw").style.display = d; $(".if-dns").style.display = d;
+        $(".if-search").style.display = d; $(".if-addroute").style.display = d;
+        $(".if-routes").style.display = d;
+      };
+      toggleStaticFields();
       // Hide the DHCP toggle for a globally-disabled family.
       $(".if-d4").closest(".if-chk").style.display = fam4 ? "flex" : "none";
       $(".if-d6").closest(".if-chk").style.display = fam6 ? "flex" : "none";
 
       // Live edits update the model + YAML without re-rendering (keeps focus).
       $(".if-name").addEventListener("input", (e) => { it.name = e.target.value.trim() || suggestName(it.type); rebuildYamlFromModules(); });
-      $(".if-addr").addEventListener("input", (e) => { it.addr = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".if-addr").addEventListener("input", (e) => { it.addr = e.target.value.trim(); toggleStaticFields(); rebuildYamlFromModules(); });
+      $(".if-gw").addEventListener("input", (e) => { it.gw = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".if-dns").addEventListener("input", (e) => { it.dns = e.target.value.trim(); rebuildYamlFromModules(); });
+      $(".if-search").addEventListener("input", (e) => { it.search = e.target.value.trim(); rebuildYamlFromModules(); });
       $(".if-ssid").addEventListener("input", (e) => { it.ssid = e.target.value; rebuildYamlFromModules(); });
       $(".if-psk").addEventListener("input",  (e) => { it.psk  = e.target.value; rebuildYamlFromModules(); });
       $(".if-d4").addEventListener("change", (e) => { it.dhcp4 = e.target.checked; rebuildYamlFromModules(); });
@@ -800,12 +1193,14 @@ network:
       // Type change toggles the Wi-Fi fields, so re-render this card set.
       $(".if-type").addEventListener("change", (e) => { it.type = e.target.value; renderIfaces(); rebuildYamlFromModules(); });
       $(".if-del").addEventListener("click", () => removeIface(idx));
+      $(".if-addroute").addEventListener("click", () => { it.routes = it.routes || []; it.routes.push({ to: "", via: "", metric: "", onlink: false }); renderIfaces(); rebuildYamlFromModules(); });
+      renderRoutes($(".if-routes"), it);
 
       list.appendChild(card);
     });
     // Dim the modules the builder now owns.
     const has = ifaces.length > 0;
-    document.querySelectorAll('.module-button[data-type="ethernets"], .module-button[data-type="wifis"]')
+    document.querySelectorAll('.module-node[data-type="ethernets"], .module-button[data-type="wifis"]')
       .forEach(b => b.classList.toggle("superseded", has));
   }
 
@@ -853,27 +1248,75 @@ network:
       # optional: true
 `;
 
-  function ifaceBody(i) {
+  // `p` is a routing() plan entry from backends.js (or undefined) — the same
+  // plan the networkd/NM tabs use, so a declared gateway and any source-based
+  // policy routing come out identical on all three.
+  function ifaceBody(i, p) {
     const q = "      ";
     let s = "    " + (i.name || "iface") + ":\n";
     // Respect the global IPv4/IPv6 family toggles here too.
     const d4 = fam4 && i.dhcp4;
     const d6 = fam6 && i.dhcp6;
-    const addrV6 = /:/.test(i.addr);
-    const showAddr = !!i.addr && ((addrV6 && fam6) || (!addrV6 && fam4));
+    // Multiple addresses allowed; keep only those whose family is enabled.
+    const addrList = CarinoNet.addrsOf(i.addr)
+      .filter(a => CarinoNet.isV6addr(a) ? fam6 : fam4);
+    const hasV4addr = addrList.some(a => !CarinoNet.isV6addr(a));
+    const showAddr = addrList.length > 0;
     // route-metric per interface: wired preferred (100) over Wi-Fi (600).
     const metric = i.type === "wifi" ? 600 : 100;
     if (d4) {
       s += q + "dhcp4: true\n";
       s += q + "dhcp4-overrides:\n" + q + "  route-metric: " + metric + "\n";
-    } else if (showAddr && !addrV6) s += q + "dhcp4: false\n";
+    } else if (hasV4addr) s += q + "dhcp4: false\n";
     if (d6) {
       s += q + "dhcp6: true\n";
       s += q + "dhcp6-overrides:\n" + q + "  route-metric: " + metric + "\n";
     }
     if (showAddr) {
-      const a = addrV6 ? '"' + i.addr + '"' : i.addr;   // quote IPv6
-      s += q + "addresses: [ " + a + " ]\n";
+      const rendered = addrList.map(a => CarinoNet.isV6addr(a) ? '"' + a + '"' : a);   // quote IPv6
+      s += q + "addresses: [ " + rendered.join(", ") + " ]\n";
+    }
+    // Per-interface DNS.
+    const dns = CarinoNet.listOf(i.dns), search = CarinoNet.listOf(i.search);
+    if (dns.length || search.length) {
+      s += q + "nameservers:\n";
+      if (dns.length) s += q + "  addresses: [ " + dns.map(d => CarinoNet.isV6addr(d) ? '"' + d + '"' : d).join(", ") + " ]\n";
+      if (search.length) s += q + "  search: [ " + search.join(", ") + " ]\n";
+    }
+    // Routing: the default (via the gateway) goes in the main table so the host
+    // can originate traffic; when multi-homed we also copy it plus the on-link
+    // subnet into this port's table and add a `from` rule for reply symmetry;
+    // then the user's own static routes.
+    const uroutes = CarinoNet.userRoutes(i);
+    const wantRoutes = (p && (p.gw || (p.table && p.subnet))) || uroutes.length;
+    if (wantRoutes) {
+      s += q + "routes:\n";
+      if (p && p.gw) {
+        s += q + "  - to: default\n";
+        s += q + "    via: " + p.gw + "\n";
+        s += q + "    metric: " + p.metric + "\n";
+      }
+      if (p && p.table && p.gw) {
+        s += q + "  - to: default\n";
+        s += q + "    via: " + p.gw + "\n";
+        s += q + "    table: " + p.table + "\n";
+      }
+      if (p && p.table && p.subnet) {
+        s += q + "  - to: " + p.subnet + "\n";
+        s += q + "    scope: link\n";
+        s += q + "    table: " + p.table + "\n";
+      }
+      uroutes.forEach(r => {
+        s += q + "  - to: " + r.to + "\n";
+        if (r.via) s += q + "    via: " + r.via + "\n";
+        if (r.metric) s += q + "    metric: " + r.metric + "\n";
+        if (r.onlink) s += q + "    on-link: true\n";
+      });
+    }
+    if (p && p.table) {
+      s += q + "routing-policy:\n";
+      s += q + "  - from: " + p.addrIp + "\n";
+      s += q + "    table: " + p.table + "\n";
     }
     if (!d4 && !d6 && !showAddr) s += q + (fam4 ? "dhcp4: true\n" : "dhcp6: true\n");  // sane default
     return s;
@@ -882,32 +1325,49 @@ network:
     const eth  = ifaces.filter(i => i.type === "ethernet");
     const wifi = ifaces.filter(i => i.type === "wifi");
     const ref  = currentTemplate === "reference";   // add commented option menus
+    const rt   = CarinoNet.routing(ifaces, fam4, fam6);
+    const plan = (i) => rt.byIdx[ifaces.indexOf(i)];
     let out = "";
     if (eth.length) {
       out += "  # Custom Ethernet interfaces\n  ethernets:\n";
-      eth.forEach(i => { out += ifaceBody(i); if (ref) out += ETH_REF; });
+      eth.forEach(i => { out += ifaceBody(i, plan(i)); if (ref) out += ETH_REF; });
     }
     if (wifi.length) {
       out += "  # Custom Wi-Fi interfaces\n  wifis:\n";
       wifi.forEach(i => {
         out += "    " + (i.name || "iface") + ":\n";
         out += "      access-points:\n";
-        out += '        "' + (i.ssid || "SSID") + '":\n';
-        out += '          password: "' + (i.psk || "") + '"\n';
-        out += ifaceBody(i).split("\n").slice(1).join("\n");  // reuse addressing lines
+        // JSON.stringify yields a valid YAML double-quoted scalar, so an SSID
+        // or passphrase containing " \ or other specials can't break the YAML.
+        out += '        ' + JSON.stringify(i.ssid || "SSID") + ':\n';
+        out += '          password: ' + JSON.stringify(i.psk || "") + '\n';
+        out += ifaceBody(i, plan(i)).split("\n").slice(1).join("\n");  // reuse addressing lines
         if (ref) out += WIFI_REF;
       });
+    }
+    // netplan can't set sysctls; leave the same-subnet tuning as a comment.
+    if (rt.shared) {
+      out += "\n" + CarinoNet.sysctlBlock(rt.list.filter(x => !x.isV6).map(x => x.name))
+        .split("\n").map(l => l ? "  " + l : l).join("\n") + "\n";
     }
     return out;
   }
 
   // ---- DHCP + static-address analyzer ----------------------------------
-  function analyzeConfig() {
+  // Having both DHCP and a static address on one interface is a property of the
+  // declared intent, so the alert must appear on every backend tab — the same
+  // interface renders that way in all three. On netplan we parse the YAML (which
+  // also catches hand-edits); on the INI backends we read the interface model
+  // directly, since js-yaml can't parse INI.
+  const escHtml = (s) => String(s).replace(/[&<>"]/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function netplanYamlHits() {
     let doc;
     try { doc = jsyaml.load(editor.getValue()); }
-    catch (e) { warnBox.style.display = "none"; return; }   // invalid mid-edit → stay quiet
+    catch (e) { return null; }               // invalid mid-edit → signal "stay quiet"
     const net = doc && doc.network;
-    if (!net || typeof net !== "object") { warnBox.style.display = "none"; return; }
+    if (!net || typeof net !== "object") return [];
     const TYPES = ["ethernets", "wifis", "bridges", "vlans", "bonds", "tunnels", "virtual-ethernets"];
     const hits = [];
     for (const t of TYPES) {
@@ -923,16 +1383,53 @@ network:
         }
       }
     }
-    if (!hits.length) { warnBox.style.display = "none"; return; }
+    return hits;
+  }
+
+  // Same conflict read straight from the custom-interface model — matches what
+  // networkd/NM render (DHCP on for a family AND a static address of that family).
+  function ifaceModelHits() {
+    const hits = [];
+    ifaces.forEach(it => {
+      const addrV6 = /:/.test(it.addr || ""), hasAddr = !!it.addr;
+      const staticV4 = hasAddr && !addrV6 && fam4, staticV6 = hasAddr && addrV6 && fam6;
+      const d4 = fam4 && it.dhcp4, d6 = fam6 && it.dhcp6;
+      const which = [staticV4 && d4 && "DHCPv4", staticV6 && d6 && "DHCPv6"].filter(Boolean).join(" + ");
+      if (which) hits.push((it.name || "iface") + ": " + which + " + static " + it.addr);
+    });
+    return hits;
+  }
+
+  function analyzeConfig() {
+    const dhcpHits = currentBackend === "netplan" ? netplanYamlHits() : ifaceModelHits();
+    const rt = CarinoNet.routing(ifaces, fam4, fam6);
+    let html = "";
+    if (dhcpHits && dhcpHits.length) {
+      html +=
+        "&#9888; <b>DHCP and a static address on the same interface</b><br>" +
+        dhcpHits.map(h => "&bull; " + escHtml(h)).join("<br>") +
+        "<br><br>This is valid, but all three backends apply <b>both</b>: the interface keeps the " +
+        "static address <i>and</i> accepts the DHCP lease, so it ends up multi-homed. Each source can " +
+        "install a <b>default route</b>, and the competing route metrics decide egress non-deterministically. " +
+        "Use it only for intentional multi-addressing. Otherwise turn the matching DHCP off " +
+        "(netplan <code>dhcp4: false</code>, networkd <code>DHCP=no</code>, NM <code>method=manual</code>) " +
+        "or drop the static address and let DHCP manage it.";
+    }
+    if (rt.multihomed) {
+      if (html) html += "<hr class='warn-sep'>";
+      html +=
+        "&#8505;&#65039; <b>Multi-homed — source-based routing added</b><br>" +
+        "Two or more ports have a static gateway" + (rt.shared ? " on the <b>same subnet</b>" : "") +
+        ", so one routing table would send every reply out whichever port owns the default route — " +
+        "an asymmetric path that reverse-path filtering drops (the classic “ping works one way”). " +
+        "Each port now gets its <b>own routing table</b> plus a <code>from &lt;ip&gt; table N</code> rule, " +
+        "so a reply always leaves the port its request arrived on." +
+        (rt.shared ? " Because the ports share a subnet, the output also includes the recommended " +
+          "<code>rp_filter=2</code> / <code>arp_ignore</code> / <code>arp_announce</code> sysctls." : "");
+    }
+    if (!html) { warnBox.style.display = "none"; return; }
     warnBox.style.display = "block";
-    warnBox.innerHTML =
-      "&#9888; <b>DHCP and a static address on the same interface</b><br>" +
-      hits.map(h => "&bull; " + h).join("<br>") +
-      "<br><br>This is valid, but <code>networkd</code> applies <b>both</b>: the interface keeps the " +
-      "static address <i>and</i> accepts the DHCP lease, so it ends up multi-homed. Each source can " +
-      "install a <b>default route</b>, and the competing route metrics decide egress non-deterministically. " +
-      "Use it only for intentional multi-addressing. Otherwise set <code>dhcp4: false</code> " +
-      "(and/or <code>dhcp6: false</code>) when you assign a static address, or drop the static and let DHCP manage it.";
+    warnBox.innerHTML = html;
   }
 
   // networkd units and NM keyfiles are INI, so js-yaml would happily accept
@@ -959,6 +1456,8 @@ network:
       else validateIni(content);
       errorBox.style.display = "none";
       successBox.style.display = "block";
+      clearTimeout(successBox._t);
+      successBox._t = setTimeout(() => { successBox.style.display = "none"; }, 2800);
     } catch (e) {
       successBox.style.display = "none";
       errorBox.style.display = "block";
@@ -1018,22 +1517,23 @@ network:
   });
 
   // Live DHCP-vs-static analysis whenever the document changes (lightly debounced).
-  // Keep hand edits so switching file tabs doesn't discard them.
+  // Keep hand edits so switching file tabs doesn't discard them. The alert now
+  // fires on every backend — it reads the netplan YAML there and the interface
+  // model on the INI tabs, so a multi-homed interface warns wherever you look.
   let analyzeTimer = null;
   editor.on("change", () => {
     if (files[activeFile]) files[activeFile].content = editor.getValue();
     clearTimeout(analyzeTimer);
-    // The analyzer parses netplan YAML; it has nothing to say about INI units.
-    analyzeTimer = setTimeout(() => {
-      if (currentBackend === "netplan") analyzeConfig();
-      else warnBox.style.display = "none";
-    }, 120);
+    analyzeTimer = setTimeout(analyzeConfig, 120);
   });
 
   buildEvalPanel();
+  populateExamples();
+  renderModuleGrid();
+  renderTemplateGrid();
   renderIfaces();
   setBackend("netplan");
-  setTemplate("full");
+  setTemplate(currentTemplate);
 </script>
 
 <script src="carino-navbar.js" data-app="Netplan" defer></script>

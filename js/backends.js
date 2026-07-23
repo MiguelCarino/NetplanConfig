@@ -35,26 +35,118 @@
 
   function famLabel(v4, v6) { return v4 && v6 ? 'dual-stack' : v4 ? 'IPv4-only' : 'IPv6-only'; }
 
-  // Resolve one custom interface into a per-family mode, matching what the
-  // netplan side means by the same inputs. The subtle one is IPv6: netplan
-  // leaves accept-ra at its default (on) unless you say otherwise, so an
-  // interface with the v6 family enabled but nothing v6-specific set still
-  // gets SLAAC. Emitting "off" here instead would silently disagree with the
-  // netplan tab for the very same intent.
-  //   'dhcp' lease · 'static' address · 'ra' router advertisements · 'off'
+  // The address field may hold several addresses (space/comma separated) — the
+  // netplan "multiple addresses on one interface" case.
+  function addrsOf(s) { return (s || '').split(/[\s,]+/).filter(Boolean); }
+  function isV6addr(a) { return /:/.test(a); }
+  // A DNS/search field: same lenient split.
+  function listOf(s) { return (s || '').split(/[\s,]+/).filter(Boolean); }
+  // User-defined static routes on an interface — only those with a destination.
+  function userRoutes(i) {
+    return ((i && i.routes) || []).filter(function (r) { return r && r.to; });
+  }
+  // A route's family: from its destination, or (for "default") from its gateway.
+  function routeIsV6(r) { return isV6addr(r.to === 'default' ? (r.via || '') : r.to); }
+
+  // Resolve one custom interface into per-family facts, matching exactly what
+  // the netplan side does with the same inputs. DHCP and a static address are
+  // tracked SEPARATELY, not as one exclusive mode: netplan happily emits
+  // `dhcp4: true` AND `addresses: [...]` together, so a declared address must
+  // survive even when DHCP is on. Multiple addresses of either family are kept.
+  //
+  // Fallbacks that keep the three in step:
+  //   * a family that's on but has nothing set at all → a lease (netplan's
+  //     "sane default"), so an untouched interface still comes up;
+  //   * IPv6 on with no DHCPv6 and no static → accept RAs (SLAAC), because
+  //     netplan leaves accept-ra at its default (on).
   function ifaceModes(i, v4, v6) {
-    var addrV6 = /:/.test(i.addr || '');
-    var hasAddr = !!i.addr;
-    var staticV4 = hasAddr && !addrV6 && v4;
-    var staticV6 = hasAddr && addrV6 && v6;
-    var d4 = v4 && i.dhcp4, d6 = v6 && i.dhcp6;
-    var nothingSet = !d4 && !d6 && !staticV4 && !staticV6;
+    var list = addrsOf(i.addr);
+    var a4 = list.filter(function (a) { return !isV6addr(a); });
+    var a6 = list.filter(isV6addr);
+    var staticV4 = v4 && a4.length > 0;
+    var staticV6 = v6 && a6.length > 0;
+    var d4 = !!(v4 && i.dhcp4);
+    var d6 = !!(v6 && i.dhcp6);
+    if (!d4 && !d6 && !staticV4 && !staticV6) {   // nothing set anywhere
+      if (v4) d4 = true; else if (v6) d6 = true;
+    }
     return {
-      v4: !v4 ? 'off' : d4 ? 'dhcp' : staticV4 ? 'static' : nothingSet ? 'dhcp' : 'off',
-      v6: !v6 ? 'off' : d6 ? 'dhcp' : staticV6 ? 'static' : 'ra',
-      addr: i.addr, addrV6: addrV6,
+      v4on: v4, v6on: v6,
+      d4: d4, d6: d6,                 // request a DHCP lease for this family
+      staticV4: staticV4, staticV6: staticV6,
+      addrs4: v4 ? a4 : [], addrs6: v6 ? a6 : [],
+      ra6: v6 && !d6 && !staticV6,    // SLAAC via Router Advertisements
       metric: i.type === 'wifi' ? 600 : 100
     };
+  }
+
+  // IPv4 network address for a "ip/prefix" string, e.g. 192.168.1.10/24 ->
+  // 192.168.1.0/24. Returns null for anything not a clean IPv4 CIDR (we only
+  // compute on-link subnets for v4 — the case this actually matters for).
+  function v4net(ip, prefix) {
+    var p = parseInt(prefix, 10);
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || isNaN(p) || p < 0 || p > 32) return null;
+    var o = ip.split('.').map(Number);
+    if (o.some(function (x) { return x > 255; })) return null;
+    var n = ((o[0] << 24) >>> 0) + (o[1] << 16) + (o[2] << 8) + o[3];
+    var mask = p === 0 ? 0 : (0xFFFFFFFF << (32 - p)) >>> 0;
+    var net = (n & mask) >>> 0;
+    return ((net >>> 24) & 255) + '.' + ((net >>> 16) & 255) + '.' +
+           ((net >>> 8) & 255) + '.' + (net & 255) + '/' + p;
+  }
+
+  // Plan the routing for the custom interfaces. A static address with a gateway
+  // gets a default route + metric. When two or more static ports carry a
+  // gateway, OR two share an IPv4 subnet, the box is multi-homed: a single
+  // routing table would send replies out whichever port owns the default route,
+  // so return traffic for the other port takes an asymmetric path and gets
+  // dropped by reverse-path filtering — the classic "two NICs, same range,
+  // ping works one way" bug. The fix is one table per port plus a `from <ip>`
+  // rule, so a reply always leaves the port its request arrived on.
+  function routing(ifaces, v4, v6) {
+    var statics = [];
+    (ifaces || []).forEach(function (i, idx) {
+      // Policy routing keys off the interface's PRIMARY address (the first one);
+      // multi-address + same-subnet multi-homing is an edge we keep simple.
+      var primary = addrsOf(i.addr)[0];
+      if (!primary) return;
+      var isV6 = isV6addr(primary);
+      if (isV6 ? !v6 : !v4) return;
+      statics.push({
+        idx: idx, name: i.name || 'iface', isV6: isV6,
+        addrIp: (primary.split('/')[0] || '').trim(),
+        gw: (i.gw || '').trim(),
+        subnet: isV6 ? null : v4net((primary.split('/')[0] || ''), (primary.split('/')[1] || '')),
+        metric: i.type === 'wifi' ? 600 : 100
+      });
+    });
+    var gwCount = statics.filter(function (s) { return s.gw; }).length;
+    var subnetSeen = {}, shared = false;
+    statics.forEach(function (s) {
+      if (s.subnet) { if (subnetSeen[s.subnet]) shared = true; subnetSeen[s.subnet] = true; }
+    });
+    var multihomed = gwCount >= 2 || shared;
+    var byIdx = {};
+    statics.forEach(function (s, k) {
+      s.table = multihomed ? 100 + k : null;   // one table per static port
+      s.metric += k;                            // +k so main-table defaults never tie
+      byIdx[s.idx] = s;
+    });
+    return { multihomed: multihomed, shared: shared, byIdx: byIdx, list: statics };
+  }
+
+  // Recommended when two ports share a subnet: stop ARP flux (a port answering
+  // for the other's address) and let reverse-path filtering accept the source
+  // routing above. Drop-in for /etc/sysctl.d/, same on every backend.
+  function sysctlBlock(names) {
+    var s = '# Multiple ports on the same subnet — put this in\n' +
+      '# /etc/sysctl.d/10-multihome.conf and `sudo sysctl --system`:\n' +
+      '#   net.ipv4.conf.all.rp_filter = 2        # loose RPF, not strict\n';
+    (names || []).forEach(function (n) {
+      s += '#   net.ipv4.conf.' + n + '.arp_ignore = 1     # answer ARP only for this port’s IP\n';
+      s += '#   net.ipv4.conf.' + n + '.arp_announce = 2   # source ARP from this port’s IP\n';
+    });
+    return s;
   }
 
   // Comment out a block so it reads as an inline reference menu.
@@ -120,6 +212,13 @@
       s += '\n[DHCPv6]\n';
       s += L('RouteMetric=' + (o.metric || 100), full && 'default-route priority for the IPv6 lease');
     }
+    // Static (non-default) routes get their own [Route] sections.
+    (o.routes || []).forEach(function (r) {
+      s += '\n[Route]\n';
+      s += L('Destination=' + r.to, full && (r.note || 'static route destination'));
+      if (r.via) s += L('Gateway=' + r.via, full && 'next hop');
+      if (r.metric) s += L('Metric=' + r.metric, full && 'route priority — lower wins');
+    });
     return s;
   }
 
@@ -142,6 +241,7 @@
   function networkd(ctx) {
     var files = [];
     var full = ctx.full, ref = ctx.ref, v4 = ctx.v4, v6 = ctx.v6;
+    var showcase = ctx.showcase !== undefined ? ctx.showcase : full;   // rare knobs
     var mods = ctx.modules, ifaces = ctx.ifaces || [];
     var custom = ifaces.length > 0;
 
@@ -158,31 +258,73 @@
 
     /* -- physical links -------------------------------------------------- */
     if (custom) {
+      var rt = routing(ifaces, v4, v6);
       ifaces.forEach(function (i, idx) {
         var isWifi = i.type === 'wifi';
         var m = ifaceModes(i, v4, v6);
+        var p = rt.byIdx[idx];
         var s = (idx === 0 ? head + '\n' : '');
         s += '[Match]\n';
         s += L('Name=' + (i.name || 'iface'), full && 'match this interface by name');
         s += '\n[Network]\n';
-        var dh = m.v4 === 'dhcp' && m.v6 === 'dhcp' ? 'yes'
-               : m.v4 === 'dhcp' ? 'ipv4' : m.v6 === 'dhcp' ? 'ipv6' : 'no';
+        var dh = m.d4 && m.d6 ? 'yes' : m.d4 ? 'ipv4' : m.d6 ? 'ipv6' : 'no';
         s += L('DHCP=' + dh, full && 'which families request a lease');
-        if (m.v4 === 'static' || m.v6 === 'static') {
-          s += L('Address=' + m.addr, full && 'static address in CIDR form');
-        }
-        if (m.v6 === 'off') s += L('IPv6AcceptRA=no', full && 'ignore IPv6 Router Advertisements');
-        else if (m.v6 === 'ra') s += L('IPv6AcceptRA=yes', full && 'address via SLAAC from Router Advertisements');
-        if (m.v4 !== 'off' && m.v6 === 'off') s += L('LinkLocalAddressing=ipv4', full && 'keep only the IPv4 link-local address');
-        else if (m.v6 !== 'off' && m.v4 === 'off') s += L('LinkLocalAddressing=ipv6', full && 'keep only the IPv6 link-local address');
-        if (m.v4 === 'dhcp') {
+        // Every declared static address is emitted (multiple allowed), whether
+        // or not DHCP is also on — so the IPs the user typed are never lost.
+        var lease = (m.staticV4 && m.d4) || (m.staticV6 && m.d6);
+        m.addrs4.concat(m.addrs6).forEach(function (a) {
+          s += L('Address=' + a, full && 'static address in CIDR form' + (lease ? ' (kept alongside the lease)' : ''));
+        });
+        if (!m.v6on) s += L('IPv6AcceptRA=no', full && 'ignore IPv6 Router Advertisements');
+        else if (m.ra6) s += L('IPv6AcceptRA=yes', full && 'address via SLAAC from Router Advertisements');
+        if (m.v4on && !m.v6on) s += L('LinkLocalAddressing=ipv4', full && 'keep only the IPv4 link-local address');
+        else if (m.v6on && !m.v4on) s += L('LinkLocalAddressing=ipv6', full && 'keep only the IPv6 link-local address');
+        // Per-interface DNS lives in [Network] (Domains= carries search domains).
+        listOf(i.dns).forEach(function (d) { s += L('DNS=' + d, full && 'resolver for this link'); });
+        if (listOf(i.search).length) s += L('Domains=' + listOf(i.search).join(' '), full && 'search domains for unqualified names');
+        if (m.d4) {
           s += '\n[DHCPv4]\n';
           s += L('RouteMetric=' + m.metric, full && 'default-route priority — lower wins');
         }
-        if (m.v6 === 'dhcp') {
+        if (m.d6) {
           s += '\n[DHCPv6]\n';
           s += L('RouteMetric=' + m.metric, full && 'default-route priority for the IPv6 lease');
         }
+        // Routing for a static address. The default (via the gateway) goes in
+        // the MAIN table so the box itself can originate traffic — distinct
+        // metrics keep it deterministic. When multi-homed we ALSO copy that
+        // default plus the on-link subnet into this port's own table, and add a
+        // `from` rule, so replies leave the port their request arrived on.
+        if (p && p.gw) {
+          s += '\n[Route]\n';
+          s += L('Gateway=' + p.gw, full && 'default route (main table)');
+          s += L('Metric=' + p.metric, full && 'priority — the lower-metric port wins for outbound');
+        }
+        if (p && p.table) {
+          if (p.gw) {
+            s += '\n[Route]\n';
+            s += L('Gateway=' + p.gw, full && 'same default, in this port’s table');
+            s += L('Table=' + p.table, full && '');
+          }
+          if (p.subnet) {
+            s += '\n[Route]\n';
+            s += L('Destination=' + p.subnet, full && 'on-link subnet, in this port’s table');
+            s += L('Scope=link', full && 'directly reachable, no gateway');
+            s += L('Table=' + p.table, full && 'so on-link replies use this port too');
+          }
+          s += '\n[RoutingPolicyRule]\n';
+          s += L('From=' + p.addrIp, full && 'traffic sourced from this port’s address…');
+          s += L('Table=' + p.table, full && '…is routed by this port’s table');
+        }
+        // User-defined static routes (to / via / metric / on-link). "default"
+        // is expressed by a Gateway with no Destination in networkd.
+        userRoutes(i).forEach(function (r) {
+          s += '\n[Route]\n';
+          if (r.to !== 'default') s += L('Destination=' + r.to, full && 'static route destination');
+          if (r.via) s += L('Gateway=' + r.via, full && 'next hop');
+          if (r.metric) s += L('Metric=' + r.metric, full && 'route priority — lower wins');
+          if (r.onlink) s += L('GatewayOnLink=yes', full && 'gateway is directly reachable, not itself routed');
+        });
         if (isWifi) {
           s += '\n' +
             '# networkd does NOT speak WPA. Association is a separate daemon:\n' +
@@ -196,22 +338,27 @@
             '# reason laptops run NetworkManager instead.\n';
         }
         if (ref) s += '\n' + commentOut(NW_ETH_REF);
+        // Same-subnet multi-homing also needs the ARP/RPF sysctls; show them once.
+        if (idx === 0 && rt.shared) {
+          s += '\n' + sysctlBlock(rt.list.filter(function (x) { return !x.isV6; }).map(function (x) { return x.name; }));
+        }
         files.push({ path: '/etc/systemd/network/10-' + (i.name || 'iface') + '.network', mode: 'ini', content: s });
       });
     } else if (mods.has('ethernets')) {
       var s = head + '\n[Match]\n';
       s += L('Name=enp1s0', full && 'match one NIC by its predictable name');
-      if (full) s += L('# MACAddress=00:11:22:33:44:55', 'or bind to the card by MAC instead');
+      if (showcase) s += L('# MACAddress=00:11:22:33:44:55', 'or bind to the card by MAC instead');
       s += '\n';
       s += nwNetworkBody({
         full: full, v4: v4, v6: v6, staticMode: full,
         addrs: full ? (v4 ? ['192.168.1.10/24'] : []).concat(v6 ? ['2001:db8::10/64'] : []) : [],
         gateways: full ? (v4 ? [{ via: '192.168.1.1', note: 'IPv4 default gateway' }] : [])
           .concat(v6 ? [{ via: '2001:db8::1', note: 'IPv6 default gateway' }] : []) : [],
+        routes: full && v4 ? [{ to: '10.0.0.0/8', via: '192.168.1.254', metric: 100, note: 'static route to another subnet (VPN, lab, DC…)' }] : [],
         dns: full ? (v4 ? ['8.8.8.8', '8.8.4.4'] : []).concat(v6 ? ['2001:4860:4860::8888'] : []) : [],
         search: full && v4, metric: 100
       });
-      if (full) {
+      if (showcase) {
         s += '\n[Link]\n';
         s += L('MTUBytes=1500', 'link MTU in bytes (1500 = standard Ethernet)');
       }
@@ -244,7 +391,7 @@
       var nd = '[NetDev]\n';
       nd += L('Name=br0', full && 'the bridge device to create');
       nd += L('Kind=bridge', full && 'a software switch');
-      if (full) {
+      if (showcase) {
         nd += '\n[Bridge]\n';
         nd += L('STP=yes', 'run Spanning Tree to prevent forwarding loops');
         nd += L('ForwardDelaySec=4', 'seconds a port waits before forwarding');
@@ -288,7 +435,7 @@
             full: full, v4: v4, v6: v6, staticMode: true,
             addrs: (v4 ? ['192.168.100.2/24'] : []).concat(v6 ? ['2001:db8:100::2/64'] : []), metric: 100
           }) +
-          (full ? '\n[Link]\n' + L('MTUBytes=1450', 'leave room for the 4-byte VLAN tag') : '')
+          (showcase ? '\n[Link]\n' + L('MTUBytes=1450', 'leave room for the 4-byte VLAN tag') : '')
       });
     }
 
@@ -298,7 +445,7 @@
       bd += L('Kind=bond', full && 'link aggregation');
       bd += '\n[Bond]\n';
       bd += L('Mode=active-backup', full && 'one active link (or balance-rr, 802.3ad)');
-      if (full) bd += L('MIIMonitorSec=100ms', 'link-health poll interval');
+      if (showcase) bd += L('MIIMonitorSec=100ms', 'link-health poll interval');
       files.push({ path: '/etc/systemd/network/20-bond0.netdev', mode: 'ini', content: bd });
       files.push({
         path: '/etc/systemd/network/10-bond0-members.network', mode: 'ini',
@@ -321,7 +468,7 @@
       td += '\n[Tunnel]\n';
       td += L('Local=' + (v6only ? '2001:db8::1' : '192.168.1.10'), full && "this host's tunnel endpoint");
       td += L('Remote=' + (v6only ? '2001:db8::2' : '192.168.2.10'), full && "the peer's tunnel endpoint");
-      if (full) td += L('TTL=64', 'TTL / hop-limit stamped on encapsulated packets');
+      if (showcase) td += L('TTL=64', 'TTL / hop-limit stamped on encapsulated packets');
       files.push({ path: '/etc/systemd/network/20-gre1.netdev', mode: 'ini', content: td });
       files.push({
         path: '/etc/systemd/network/25-gre1.network', mode: 'ini',
@@ -350,6 +497,43 @@
       });
     }
 
+    if (mods.has('dummy')) {
+      files.push({
+        path: '/etc/systemd/network/20-dm0.netdev', mode: 'ini',
+        content: '[NetDev]\n' + L('Name=dm0', full && 'the dummy device to create') +
+          L('Kind=dummy', full && 'an always-up virtual NIC')
+      });
+      files.push({
+        path: '/etc/systemd/network/25-dm0.network', mode: 'ini',
+        content: '[Match]\n' + L('Name=dm0', full && 'address the dummy device') + '\n' +
+          nwNetworkBody({
+            full: full, v4: v4, v6: v6, staticMode: true,
+            addrs: (v4 ? ['10.10.10.1/32'] : []).concat(v6 ? ['fd00:d0::1/128'] : []), metric: 100
+          })
+      });
+    }
+
+    if (mods.has('vrf')) {
+      files.push({
+        path: '/etc/systemd/network/20-vrf-blue.netdev', mode: 'ini',
+        content: '[NetDev]\n' + L('Name=vrf-blue', full && 'the VRF device to create') +
+          L('Kind=vrf', full && 'virtual routing & forwarding domain') +
+          '\n[VRF]\n' + L('Table=100', full && 'the routing table this VRF owns')
+      });
+      files.push({
+        path: '/etc/systemd/network/25-vrf-blue.network', mode: 'ini',
+        content: '[Match]\n' + L('Name=vrf-blue', full && 'the VRF device itself') + '\n' +
+          '[Route]\n' + L('Gateway=' + (v6 && !v4 ? 'fd00::1' : '10.0.0.1'), full && 'default route inside the VRF table') +
+          L('Table=100', full && 'installed in the VRF table, not main')
+      });
+      files.push({
+        path: '/etc/systemd/network/10-eth0-vrf.network', mode: 'ini',
+        content: '# A VRF MEMBER is enslaved to the VRF; its traffic uses table 100.\n' +
+          '[Match]\n' + L('Name=eth0', full && 'the member link') + '\n' +
+          '[Network]\n' + L('VRF=vrf-blue', full && 'enslave this link to the VRF')
+      });
+    }
+
     if (!files.length) {
       files.push({
         path: '/etc/systemd/network/10-enp1s0.network', mode: 'ini',
@@ -367,21 +551,27 @@
    * that is group- or world-readable, because it may hold a passphrase.
    */
 
+  // method=auto with static addresses present means "DHCP *and* these extra
+  // static addresses" — NM applies both, which is how a declared IP survives
+  // even with DHCP on, matching the netplan and networkd tabs.
   function nmIpv4(o) {
     var full = o.full;
     var s = '\n[ipv4]\n';
     if (!o.v4) return s + L('method=disabled', full && 'no IPv4 on this profile');
-    if (o.staticMode) {
-      s += L('method=manual', full && 'static addressing');
-      (o.addrs || []).forEach(function (a, n) {
-        s += L('address' + (n + 1) + '=' + a, full && 'CIDR address[,gateway] — numbered, 1-based');
-      });
-      if (o.dns && o.dns.length) s += L('dns=' + o.dns.join(';') + ';', full && 'resolvers, semicolon-separated, trailing ;');
-      if (full && o.search) s += L('dns-search=example.local;', 'search domain for unqualified names');
-    } else {
-      s += L('method=auto', full && 'DHCPv4');
-      s += L('route-metric=' + (o.metric || 100), full && 'default-route priority — lower wins');
-    }
+    var hasStatic = o.addrs && o.addrs.length;
+    var method = o.dhcp ? 'auto' : (hasStatic ? 'manual' : 'auto');
+    var both = o.dhcp && hasStatic;
+    s += L('method=' + method, full && (method === 'manual' ? 'static addressing'
+      : both ? 'DHCPv4, plus the static address(es) below' : 'DHCPv4'));
+    if (hasStatic) o.addrs.forEach(function (a, n) {
+      s += L('address' + (n + 1) + '=' + a, full && 'CIDR address[,gateway] — numbered, 1-based');
+    });
+    (o.routes || []).forEach(function (r, n) {
+      s += L('route' + (n + 1) + '=' + r.to + ',' + r.via + (r.metric ? ',' + r.metric : ''), full && (r.note || 'static route'));
+    });
+    if (o.dns && o.dns.length) s += L('dns=' + o.dns.join(';') + ';', full && 'resolvers, semicolon-separated, trailing ;');
+    if (full && o.search) s += L('dns-search=example.local;', 'search domain for unqualified names');
+    if (o.dhcp) s += L('route-metric=' + (o.metric || 100), full && 'default-route priority — lower wins');
     return s;
   }
 
@@ -389,16 +579,16 @@
     var full = o.full;
     var s = '\n[ipv6]\n';
     if (!o.v6) return s + L('method=disabled', full && 'no IPv6 on this profile');
-    if (o.staticMode && o.addrs6 && o.addrs6.length) {
-      s += L('method=manual', full && 'static IPv6');
-      o.addrs6.forEach(function (a, n) {
-        s += L('address' + (n + 1) + '=' + a, full && 'CIDR address[,gateway]');
-      });
-    } else {
-      s += L('method=auto', full && 'SLAAC / DHCPv6 as offered');
-      s += L('route-metric=' + (o.metric || 100), full && 'default-route priority');
-    }
-    if (full) s += L('addr-gen-mode=stable-privacy', 'stable but non-MAC-derived interface IDs');
+    var hasStatic = o.addrs6 && o.addrs6.length;
+    var method = o.dhcp ? 'auto' : (hasStatic ? 'manual' : 'auto');
+    var both = o.dhcp && hasStatic;
+    s += L('method=' + method, full && (method === 'manual' ? 'static IPv6'
+      : both ? 'SLAAC / DHCPv6, plus the static address(es) below' : 'SLAAC / DHCPv6 as offered'));
+    if (hasStatic) o.addrs6.forEach(function (a, n) {
+      s += L('address' + (n + 1) + '=' + a, full && 'CIDR address[,gateway]');
+    });
+    if (o.dhcp) s += L('route-metric=' + (o.metric || 100), full && 'default-route priority');
+    if (full && method === 'auto') s += L('addr-gen-mode=stable-privacy', 'stable but non-MAC-derived interface IDs');
     return s;
   }
 
@@ -407,6 +597,61 @@
     s += L('id=' + id, full && 'profile name, as shown by nmcli');
     s += L('type=' + type, full && 'connection type');
     if (iface) s += L('interface-name=' + iface, full && 'device this profile binds to');
+    return s;
+  }
+
+  // Build one whole [ipvN] section for a custom interface: method, every
+  // address, the main-table default + metric, any policy-routing table copies
+  // and source rule, the user's static routes, and DNS — all with a single
+  // route-number counter so the keyfile stays valid. `pf` is the routing() plan
+  // entry only when it belongs to THIS family; `uroutes` are the user routes
+  // whose destination is in this family.
+  function nmFamily(fam, o) {
+    var isV6 = fam === 'v6';
+    var s = '\n[' + (isV6 ? 'ipv6' : 'ipv4') + ']\n';
+    if (!o.on) return s + L('method=disabled', o.full && 'no ' + (isV6 ? 'IPv6' : 'IPv4') + ' on this profile');
+    var hasStatic = o.addrs && o.addrs.length;
+    var method = o.dhcp ? 'auto' : (hasStatic ? 'manual' : 'auto');
+    var both = o.dhcp && hasStatic;
+    s += L('method=' + method, o.full && (method === 'manual' ? 'static addressing'
+      : both ? (isV6 ? 'SLAAC / DHCPv6' : 'DHCPv4') + ', plus the static address(es) below'
+             : (isV6 ? 'SLAAC / DHCPv6 as offered' : 'DHCPv4')));
+    (o.addrs || []).forEach(function (a, n) {
+      s += L('address' + (n + 1) + '=' + a, o.full && 'CIDR address[,gateway] — numbered, 1-based');
+    });
+    var pf = o.plan;   // routing plan entry, only if this family owns the primary address
+    if (pf && pf.gw) {
+      s += L('gateway=' + pf.gw, o.full && 'default route (main table)');
+      s += L('route-metric=' + pf.metric, o.full && 'priority — the lower-metric port wins for outbound');
+    } else if (o.dhcp) {
+      s += L('route-metric=' + o.metric, o.full && 'default-route priority');
+    }
+    var rn = 1;
+    if (pf && pf.table) {
+      var any = isV6 ? '::/0' : '0.0.0.0/0', host = isV6 ? '/128' : '/32';
+      if (pf.gw) {
+        s += L('route' + rn + '=' + any + ',' + pf.gw + ',' + pf.metric, o.full && 'same default, in this port’s table');
+        s += L('route' + rn + '_options=table=' + pf.table, o.full && ''); rn++;
+      }
+      if (pf.subnet) {
+        s += L('route' + rn + '=' + pf.subnet, o.full && 'on-link subnet in this port’s table');
+        s += L('route' + rn + '_options=table=' + pf.table, o.full && 'so on-link replies use this port too'); rn++;
+      }
+      s += L('routing-rule1=priority ' + pf.table + ' from ' + pf.addrIp + host + ' table ' + pf.table,
+        o.full && 'source rule: replies from this port use its table');
+    }
+    (o.routes || []).forEach(function (r) {
+      var dest = r.to === 'default' ? (isV6 ? '::/0' : '0.0.0.0/0') : r.to;
+      var parts = [dest];
+      if (r.via || r.metric) parts.push(r.via || '');
+      if (r.metric) parts.push(r.metric);
+      s += L('route' + rn + '=' + parts.join(','), o.full && 'static route');
+      if (r.onlink) s += L('route' + rn + '_options=onlink=true', o.full && 'gateway is directly reachable');
+      rn++;
+    });
+    if (o.dns && o.dns.length) s += L('dns=' + o.dns.join(';') + ';', o.full && 'resolvers, semicolon-separated, trailing ;');
+    if (o.search && o.search.length) s += L('dns-search=' + o.search.join(';') + ';', o.full && 'search domains');
+    if (o.full && !hasStatic && method === 'auto' && isV6) s += L('addr-gen-mode=stable-privacy', 'stable but non-MAC-derived interface IDs');
     return s;
   }
 
@@ -429,6 +674,7 @@
   function networkmanager(ctx) {
     var files = [];
     var full = ctx.full, ref = ctx.ref, v4 = ctx.v4, v6 = ctx.v6;
+    var showcase = ctx.showcase !== undefined ? ctx.showcase : full;   // rare knobs
     var mods = ctx.modules, ifaces = ctx.ifaces || [];
     var custom = ifaces.length > 0;
     var DIR = '/etc/NetworkManager/system-connections/';
@@ -446,9 +692,11 @@
       '# nmcli device status    # verify before you log out\n';
 
     if (custom) {
+      var rt = routing(ifaces, v4, v6);
       ifaces.forEach(function (i, idx) {
         var isWifi = i.type === 'wifi';
         var m = ifaceModes(i, v4, v6);
+        var p = rt.byIdx[idx];
         var name = i.name || 'iface';
         var s = (idx === 0 ? head + '\n' : '');
         s += nmHead(name, isWifi ? 'wifi' : 'ethernet', name, full);
@@ -460,28 +708,41 @@
           s += L('key-mgmt=wpa-psk', full && 'WPA/WPA2 personal');
           s += L('psk=' + (i.psk || 'mypassword'), full && 'passphrase — why this file must be 0600');
         }
-        // 'ra' and 'dhcp' both map to method=auto: NM's auto already means
-        // "take SLAAC and/or a lease, whichever the link offers".
-        s += nmIpv4({
-          full: full, v4: m.v4 !== 'off', staticMode: m.v4 === 'static',
-          addrs: m.v4 === 'static' ? [m.addr] : [], metric: m.metric
+        // DHCPv6 and RA both map to method=auto: NM's auto already means "take
+        // SLAAC and/or a lease, whichever the link offers". Each family's whole
+        // section — addresses, gateway, policy routing, user routes, DNS — is
+        // built by nmFamily so route numbering stays valid. User static routes
+        // and DNS entries are filed under the family of their destination.
+        var uroutes = userRoutes(i);
+        var dnsList = listOf(i.dns), searchList = listOf(i.search);
+        s += nmFamily('v4', {
+          full: full, on: m.v4on, dhcp: m.d4, addrs: m.addrs4, metric: m.metric,
+          plan: (p && !p.isV6) ? p : null,
+          routes: uroutes.filter(function (r) { return !routeIsV6(r); }),
+          dns: dnsList.filter(function (d) { return !isV6addr(d); }), search: searchList
         });
-        s += nmIpv6({
-          full: full, v6: m.v6 !== 'off', staticMode: m.v6 === 'static',
-          addrs6: m.v6 === 'static' ? [m.addr] : [], metric: m.metric
+        s += nmFamily('v6', {
+          full: full, on: m.v6on, dhcp: m.d6 || m.ra6, addrs: m.addrs6, metric: m.metric,
+          plan: (p && p.isV6) ? p : null,
+          routes: uroutes.filter(routeIsV6),
+          dns: dnsList.filter(isV6addr), search: m.v4on ? [] : searchList
         });
         if (ref) s += '\n' + commentOut(NM_REF);
+        if (idx === 0 && rt.shared) {
+          s += '\n' + sysctlBlock(rt.list.filter(function (x) { return !x.isV6; }).map(function (x) { return x.name; }));
+        }
         files.push({ path: DIR + name + '.nmconnection', mode: 'ini', content: s });
       });
     } else if (mods.has('ethernets')) {
       var s2 = head + '\n' + nmHead('enp1s0', 'ethernet', 'enp1s0', full);
       s2 += nmIpv4({
-        full: full, v4: v4, staticMode: full,
+        full: full, v4: v4, dhcp: !full,
         addrs: full && v4 ? ['192.168.1.10/24,192.168.1.1'] : [],
+        routes: full && v4 ? [{ to: '10.0.0.0/8', via: '192.168.1.254', metric: 100, note: 'static route to another subnet (VPN, lab, DC…)' }] : [],
         dns: full && v4 ? ['8.8.8.8', '8.8.4.4'] : [], search: full && v4, metric: 100
       });
       s2 += nmIpv6({
-        full: full, v6: v6, staticMode: full,
+        full: full, v6: v6, dhcp: !full,
         addrs6: full && v6 ? ['2001:db8::10/64,2001:db8::1'] : [], metric: 100
       });
       if (ref) s2 += '\n' + commentOut(NM_REF);
@@ -493,12 +754,12 @@
       w += '\n[wifi]\n';
       w += L('mode=infrastructure', full && 'join an access point');
       w += L('ssid=MyWiFi', full && 'network name');
-      if (full) w += L('hidden=false', 'set true for a non-broadcast SSID');
+      if (showcase) w += L('hidden=false', 'set true for a non-broadcast SSID');
       w += '\n[wifi-security]\n';
       w += L('key-mgmt=wpa-psk', full && 'WPA/WPA2 personal');
       w += L('psk=mypassword', full && 'passphrase, clear text — keep the file 0600');
-      w += nmIpv4({ full: full, v4: v4, metric: 600 });
-      w += nmIpv6({ full: full, v6: v6, metric: 600 });
+      w += nmIpv4({ full: full, v4: v4, dhcp: true, metric: 600 });
+      w += nmIpv6({ full: full, v6: v6, dhcp: true, metric: 600 });
       w += '\n# Unlike networkd, NM associates AND addresses — no wpa_supplicant\n' +
         '# config of your own, no second daemon to enable.\n';
       files.push({ path: DIR + 'MyWiFi.nmconnection', mode: 'ini', content: w });
@@ -506,16 +767,16 @@
 
     if (mods.has('bridges')) {
       var b = nmHead('br0', 'bridge', 'br0', full);
-      if (full) {
+      if (showcase) {
         b += '\n[bridge]\n';
         b += L('stp=true', 'run Spanning Tree to prevent loops');
         b += L('forward-delay=4', 'seconds a port waits before forwarding');
       }
       b += nmIpv4({
-        full: full, v4: v4, staticMode: full,
+        full: full, v4: v4, dhcp: !full,
         addrs: full && v4 ? ['192.168.1.5/24,192.168.1.1'] : [], dns: full && v4 ? ['1.1.1.1'] : [], metric: 100
       });
-      b += nmIpv6({ full: full, v6: v6, metric: 100 });
+      b += nmIpv6({ full: full, v6: v6, dhcp: true, metric: 100 });
       files.push({ path: DIR + 'br0.nmconnection', mode: 'ini', content: b });
       var bp = nmHead('br0-port-eth0', 'ethernet', 'eth0', full);
       bp += L('master=br0', full && 'the bridge this port joins');
@@ -530,11 +791,11 @@
       vl += L('id=100', full && '802.1Q tag, 1–4094');
       vl += L('parent=eth0', full && 'trunk interface carrying the tagged frames');
       vl += nmIpv4({
-        full: full, v4: v4, staticMode: true,
+        full: full, v4: v4, dhcp: false,
         addrs: v4 ? ['192.168.100.2/24'] : [], metric: 100
       });
       vl += nmIpv6({
-        full: full, v6: v6, staticMode: true,
+        full: full, v6: v6, dhcp: false,
         addrs6: v6 ? ['2001:db8:100::2/64'] : [], metric: 100
       });
       files.push({ path: DIR + 'vlan100.nmconnection', mode: 'ini', content: vl });
@@ -544,9 +805,9 @@
       var bo = nmHead('bond0', 'bond', 'bond0', full);
       bo += '\n[bond]\n';
       bo += L('mode=active-backup', full && 'one active link (or balance-rr, 802.3ad)');
-      if (full) bo += L('miimon=100', 'link-health poll interval in ms');
-      bo += nmIpv4({ full: full, v4: v4, metric: 100 });
-      bo += nmIpv6({ full: full, v6: v6, metric: 100 });
+      if (showcase) bo += L('miimon=100', 'link-health poll interval in ms');
+      bo += nmIpv4({ full: full, v4: v4, dhcp: true, metric: 100 });
+      bo += nmIpv6({ full: full, v6: v6, dhcp: true, metric: 100 });
       files.push({ path: DIR + 'bond0.nmconnection', mode: 'ini', content: bo });
       ['eth0', 'eth1'].forEach(function (m) {
         var p = nmHead('bond0-port-' + m, 'ethernet', m, full);
@@ -563,8 +824,8 @@
       t += L('mode=' + (v6only ? '8' : '2'), full && (v6only ? '8 = IP6GRE' : '2 = GRE') + ' — NM uses a numeric enum here');
       t += L('local=' + (v6only ? '2001:db8::1' : '192.168.1.10'), full && "this host's endpoint");
       t += L('remote=' + (v6only ? '2001:db8::2' : '192.168.2.10'), full && "the peer's endpoint");
-      t += nmIpv4({ full: full, v4: v4, staticMode: true, addrs: v4 ? ['10.1.1.1/30'] : [], metric: 100 });
-      t += nmIpv6({ full: full, v6: v6, staticMode: true, addrs6: v6 ? ['fd00:1::1/64'] : [], metric: 100 });
+      t += nmIpv4({ full: full, v4: v4, dhcp: false, addrs: v4 ? ['10.1.1.1/30'] : [], metric: 100 });
+      t += nmIpv6({ full: full, v6: v6, dhcp: false, addrs6: v6 ? ['fd00:1::1/64'] : [], metric: 100 });
       files.push({ path: DIR + 'gre1.nmconnection', mode: 'ini', content: t });
     }
 
@@ -572,10 +833,30 @@
       var ve = nmHead('veth-host', 'veth', 'veth-host', full);
       ve += '\n[veth]\n';
       ve += L('peer=veth-peer', full && 'the other end of the pair');
-      ve += nmIpv4({ full: full, v4: v4, staticMode: true, addrs: v4 ? ['169.254.1.1/30'] : [], metric: 100 });
-      ve += nmIpv6({ full: full, v6: v6, staticMode: true, addrs6: v6 ? ['fd00:2::1/64'] : [], metric: 100 });
+      ve += nmIpv4({ full: full, v4: v4, dhcp: false, addrs: v4 ? ['169.254.1.1/30'] : [], metric: 100 });
+      ve += nmIpv6({ full: full, v6: v6, dhcp: false, addrs6: v6 ? ['fd00:2::1/64'] : [], metric: 100 });
       ve += '\n# veth needs NetworkManager 1.30 or newer.\n';
       files.push({ path: DIR + 'veth-host.nmconnection', mode: 'ini', content: ve });
+    }
+
+    if (mods.has('dummy')) {
+      var dm = nmHead('dm0', 'dummy', 'dm0', full);
+      dm += nmIpv4({ full: full, v4: v4, dhcp: false, addrs: v4 ? ['10.10.10.1/32'] : [], metric: 100 });
+      dm += nmIpv6({ full: full, v6: v6, dhcp: false, addrs6: v6 ? ['fd00:d0::1/128'] : [], metric: 100 });
+      dm += '\n# type=dummy needs NetworkManager 1.34 or newer.\n';
+      files.push({ path: DIR + 'dm0.nmconnection', mode: 'ini', content: dm });
+    }
+
+    if (mods.has('vrf')) {
+      var vf = nmHead('vrf-blue', 'vrf', 'vrf-blue', full);
+      vf += '\n[vrf]\n';
+      vf += L('table=100', full && 'the routing table this VRF owns');
+      files.push({ path: DIR + 'vrf-blue.nmconnection', mode: 'ini', content: vf });
+      var vm = nmHead('vrf-blue-port-eth0', 'ethernet', 'eth0', full);
+      vm += L('master=vrf-blue', full && 'the VRF this link is enslaved to');
+      vm += L('slave-type=vrf', full && 'joins as a VRF member');
+      vm += '\n# type=vrf needs NetworkManager 1.24 or newer.\n';
+      files.push({ path: DIR + 'vrf-blue-port-eth0.nmconnection', mode: 'ini', content: vm });
     }
 
     if (!files.length) {
@@ -629,6 +910,13 @@
       if (backend === 'nm') return networkmanager(ctx);
       return null;   // netplan is rendered by index.html's own builders
     },
+    // Shared so the netplan builder in index.html parses/plans identically.
+    routing: routing,
+    sysctlBlock: sysctlBlock,
+    addrsOf: addrsOf,
+    listOf: listOf,
+    isV6addr: isV6addr,
+    userRoutes: userRoutes,
     EVAL: EVAL
   };
 })(window);

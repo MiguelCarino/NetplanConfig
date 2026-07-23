@@ -29,10 +29,33 @@ Picking it still means picking a renderer underneath.
 
 ## What it builds
 
-Ethernet, Wi-Fi, bridges, VLANs, bonds, GRE tunnels and veth pairs — each an
-annotated example you can trim, at three verbosity levels (**Full showcase**,
-**Simple**, **Simple + full comments**). The IPv4/IPv6 toggles filter every
-config, and interfaces you name yourself replace the example blocks.
+Ethernet, Wi-Fi, bridges, VLANs, bonds, GRE tunnels, veth pairs, dummy devices
+and VRFs — a palette of device-type nodes, tiled in a grid. Ethernet and Wi-Fi
+are on by default; click any node to include its example.
+
+Four template tiers set how much detail each example carries: **Simple** (bare
+DHCP), **Simple + Comments** (bare, with every full option appended as comments),
+**IT** (the common real-world config — static IP, gateway, DNS and static routes,
+commented) and **Full** (every option, including MAC match, set-name, MTU and
+tuning knobs). The IPv4/IPv6 toggles filter every config — **IPv4-only by
+default** — and interfaces you name yourself replace the example blocks.
+
+Per interface you can set one or several **static addresses**, a **gateway**
+(default route with a metric), **DNS** servers and search domains, and any number
+of **static routes** (`to` / `via` / `metric` / `on-link` for a directly-connected
+gateway) — all rendered identically on all three backends.
+
+**Multi-homing is handled for you.** Point two ports at the same subnet (or give
+two ports gateways) and the tool switches to **source-based policy routing** — a
+routing table per port plus a `from <ip>` rule — so replies leave the port their
+request arrived on, instead of getting dropped by reverse-path filtering (the
+classic "two NICs, same range, ping works one way"). It also emits the
+recommended `rp_filter` / `arp_ignore` / `arp_announce` sysctls.
+
+**Load an example** offers canonical scenarios from the netplan docs (static IP +
+DNS, directly-connected gateway, two-subnet router, bridge, bond, VLAN, VRF, Wi-Fi
+…) — the difference here is you see each one's networkd and NetworkManager
+equivalents side by side, which the netplan docs don't show.
 
 Because networkd and NetworkManager are multi-file where netplan is single-file,
 the editor gets a **tab per output file** showing its real destination path.
@@ -41,9 +64,9 @@ the editor gets a **tab per output file** showing its real destination path.
 **Validate** checks YAML on the netplan tab, and INI shape — every line a
 `[Section]` or a `key=value`, no key outside a section — on the other two.
 
-A live analyzer also flags a genuine footgun: assigning a static address *and*
-leaving DHCP on for the same family, which quietly leaves the interface
-multi-homed with two competing default routes.
+A live analyzer flags a genuine footgun on every backend tab: assigning a static
+address *and* leaving DHCP on for the same family, which quietly leaves the
+interface multi-homed with two competing default routes.
 
 ## Accuracy
 
