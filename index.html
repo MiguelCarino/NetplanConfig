@@ -901,6 +901,8 @@ network:
     document.getElementById("dlAllBtn").classList.toggle("hidden", files.length <= 1);
     errorBox.style.display = "none";
     successBox.style.display = "none";
+    // Every mutation funnels through here, so the share hash rides along.
+    updateShareHash();
   }
 
   function renderTabs() {
@@ -1530,7 +1532,7 @@ network:
   // ---- inbound URL hydration (topology → netplan bridge) ----------------
   // A link like https://netplan.carino.systems/#~<deflate-b64url> (or legacy
   // plain base64) carries an interface-intent envelope from NetworkTopology.
-  // Decode helpers: mirror of NetworkTopology js/app.js — keep byte-identical.
+  // Codec (both halves): mirror of NetworkTopology js/app.js — keep byte-identical.
 const FRAG_SCHEME = '~';
 const _canDecompress = typeof DecompressionStream !== 'undefined';
 function _bytesFromB64url(s) {
@@ -1550,6 +1552,19 @@ async function decodeFragment(frag) {
         return new TextDecoder().decode(await _pipeStream(new DecompressionStream('deflate-raw'), _bytesFromB64url(frag.slice(1))));
     }
     return decodeURIComponent(atob(frag)); // legacy
+}
+const _canCompress = typeof CompressionStream !== 'undefined';
+function _b64urlFromBytes(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function encodeShareFragment(json) {
+    const legacy = btoa(encodeURIComponent(json));
+    if (!_canCompress) return legacy;
+    const packed = await _pipeStream(new CompressionStream('deflate-raw'), new TextEncoder().encode(json));
+    const compressed = FRAG_SCHEME + _b64urlFromBytes(packed);
+    return compressed.length < legacy.length + 1 ? compressed : legacy;
 }
 
   // Whitelist-merge one inbound entry through the same defaults loadExample
@@ -1588,9 +1603,33 @@ async function decodeFragment(frag) {
       }
       renderIfaces();
       rebuildYamlFromModules();
-      // Clear the hash: reloads shouldn't re-trigger, intent shouldn't linger.
-      history.replaceState(null, "", location.pathname + location.search);
+      // The hash stays — and rebuildYamlFromModules() has just re-written it in
+      // normalized form. It is the live share URL: edit here, copy it, and paste
+      // it into the topology node's notes to keep the refined config with the node.
     }).catch(err => console.warn("Ignoring unreadable URL fragment:", err));
+  }
+
+  // ---- live share hash ----
+  // The URL fragment always mirrors the current custom interfaces, so the
+  // address bar is a copyable snapshot at any moment (same idea as the topology
+  // editor's own hash). Empty ifaces = nothing worth sharing = no hash. The
+  // sequence counter drops out-of-order async encodes; psk is stripped before
+  // encoding — a passphrase typed into the form must never reach a URL.
+  let _hashSeq = 0;
+  function updateShareHash() {
+    const seq = ++_hashSeq;
+    if (!ifaces.length) {
+      if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+      return;
+    }
+    const bare = ifaces.map(i => {
+      const copy = Object.assign({}, i, { routes: (i.routes || []).map(r => Object.assign({}, r)) });
+      delete copy.psk;
+      return copy;
+    });
+    encodeShareFragment(JSON.stringify({ v: 1, ifaces: bare, fam: [fam4, fam6] }))
+      .then(frag => { if (seq === _hashSeq) history.replaceState(null, "", "#" + frag); })
+      .catch(() => {});
   }
 
   buildEvalPanel();
