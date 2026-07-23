@@ -1527,10 +1527,77 @@ network:
     analyzeTimer = setTimeout(analyzeConfig, 120);
   });
 
+  // ---- inbound URL hydration (topology → netplan bridge) ----------------
+  // A link like https://netplan.carino.systems/#~<deflate-b64url> (or legacy
+  // plain base64) carries an interface-intent envelope from NetworkTopology.
+  // Decode helpers: mirror of NetworkTopology js/app.js — keep byte-identical.
+const FRAG_SCHEME = '~';
+const _canDecompress = typeof DecompressionStream !== 'undefined';
+function _bytesFromB64url(s) {
+    const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+}
+async function _pipeStream(stream, bytes) {
+    const w = stream.writable.getWriter(); w.write(bytes); w.close();
+    return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+}
+async function decodeFragment(frag) {
+    if (frag[0] === FRAG_SCHEME) {
+        if (!_canDecompress) throw new Error('This link is compressed, but this browser cannot decompress it.');
+        return new TextDecoder().decode(await _pipeStream(new DecompressionStream('deflate-raw'), _bytesFromB64url(frag.slice(1))));
+    }
+    return decodeURIComponent(atob(frag)); // legacy
+}
+
+  // Whitelist-merge one inbound entry through the same defaults loadExample
+  // uses. Unknown keys are dropped, types coerced; psk is NEVER taken from the
+  // wire — secrets don't belong in URL fragments, the placeholder stays.
+  function sanitizeIface(entry) {
+    const e = (entry && typeof entry === "object") ? entry : {};
+    const it = { name: "enp1s0", type: "ethernet", dhcp4: false, dhcp6: false,
+                 addr: "", gw: "", dns: "", search: "", routes: [], ssid: "MyWiFi", psk: "mypassword" };
+    if ("name" in e) it.name = String(e.name);
+    if ("type" in e) it.type = e.type === "wifi" ? "wifi" : "ethernet";
+    if ("dhcp4" in e) it.dhcp4 = !!e.dhcp4;
+    if ("dhcp6" in e) it.dhcp6 = !!e.dhcp6;
+    ["addr", "gw", "dns", "search", "ssid"].forEach(k => { if (k in e) it[k] = String(e[k]); });
+    it.routes = (Array.isArray(e.routes) ? e.routes : []).map(r => ({
+      to: String(r && r.to || ""), via: String(r && r.via || ""),
+      metric: String(r && r.metric || ""), onlink: !!(r && r.onlink) }));
+    return it;
+  }
+
+  // Envelope: { v: 1, ifaces: [...], fam: [v4, v6] }. Anything unreadable is
+  // ignored (console.warn) and the app stays in its default state.
+  function hydrateFromHash() {
+    const frag = location.hash.slice(1);
+    if (!frag) return;
+    decodeFragment(frag).then(json => {
+      const parsed = JSON.parse(json);
+      if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.ifaces)) throw new Error("bad envelope");
+      ifaces = parsed.ifaces.map(sanitizeIface);
+      if (Array.isArray(parsed.fam)) {          // mirror setFamily()
+        const c4 = document.getElementById("famV4");
+        const c6 = document.getElementById("famV6");
+        c4.checked = !!parsed.fam[0]; c6.checked = !!parsed.fam[1];
+        if (!c4.checked && !c6.checked) c4.checked = true;   // never zero families
+        fam4 = c4.checked; fam6 = c6.checked;
+      }
+      renderIfaces();
+      rebuildYamlFromModules();
+      // Clear the hash: reloads shouldn't re-trigger, intent shouldn't linger.
+      history.replaceState(null, "", location.pathname + location.search);
+    }).catch(err => console.warn("Ignoring unreadable URL fragment:", err));
+  }
+
   buildEvalPanel();
   populateExamples();
   renderModuleGrid();
   renderTemplateGrid();
+  hydrateFromHash();
   renderIfaces();
   setBackend("netplan");
   setTemplate(currentTemplate);
