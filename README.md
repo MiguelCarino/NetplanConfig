@@ -18,6 +18,11 @@ reading three sets of documentation:
 | Wi-Fi | delegates | **no WPA** — needs wpa_supplicant/iwd | native |
 | Rollback | `netplan try` (auto-reverts) | none built in | manual |
 
+**Side-by-side configs** splits the editor into one read-only pane per backend
+so the *same* intent is on screen as two or three real configs at once — tick the
+backends you want to line up (netplan / networkd / NM), each with its own file
+tabs since networkd and NetworkManager emit several files.
+
 **Compare all three** opens the full evaluation: a feature matrix, a
 recommendation per machine type, and the traps that actually bite — running two
 managers on one interface, keyfile permissions, where netplan's generated files

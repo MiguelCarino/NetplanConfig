@@ -112,6 +112,25 @@
     .file-tab.active { background: #eab308; border-color: #eab308; color: #050505; font-weight: 700; }
     .file-tab .dir { opacity: 0.55; }
     .eval-btn { margin-top: 0.4rem; border-style: dashed !important; }
+    .cmp-btn { margin-top: 0.4rem; }
+    .cmp-btn.active { background: #eab308; border-color: #eab308; color: #050505; font-weight: 700; }
+    .cmp-picker { display: flex; gap: 0.8rem; flex-wrap: wrap; margin: 0.45rem 0 0.1rem; }
+    .cmp-picker[hidden] { display: none; }
+
+    /* ---- Side-by-side compare: one read-only editor pane per backend ---- */
+    #singleView { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+    #singleView[hidden] { display: none; }
+    #compareView { flex: 1 1 0; min-height: 0; display: flex; gap: 0.5rem; }
+    #compareView[hidden] { display: none; }
+    .cmp-pane { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    .cmp-pane[hidden] { display: none; }
+    .cmp-head {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #eab308; padding: 1px 2px 6px; flex-shrink: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cmp-pane .CodeMirror { font-size: 0.78rem; }
+    @media (max-width: 720px) { #compareView { flex-direction: column; } }
 
     /* ---- Evaluate overlay ---- */
     .eval-overlay {
@@ -409,8 +428,11 @@
 
 <div class="layout">
   <div class="editor-section">
-    <div id="fileTabs" class="file-tabs"></div>
-    <textarea id="yamlEditor"></textarea>
+    <div id="singleView">
+      <div id="fileTabs" class="file-tabs"></div>
+      <textarea id="yamlEditor"></textarea>
+    </div>
+    <div id="compareView" hidden></div>
     <div class="toast-stack">
       <div id="warnBox" class="warn" style="display: none;"></div>
       <div id="errorBox" class="error" style="display: none;"></div>
@@ -429,6 +451,12 @@
       <button class="template-button active" data-be="netplan"  onclick="setBackend('netplan')">Netplan</button>
       <button class="template-button"        data-be="networkd" onclick="setBackend('networkd')">networkd</button>
       <button class="template-button"        data-be="nm"       onclick="setBackend('nm')">Network<wbr>Manager</button>
+    </div>
+    <button class="template-button cmp-btn" id="cmpToggle" onclick="toggleCompare()">⬌ Side-by-side configs</button>
+    <div class="cmp-picker" id="cmpPicker" hidden>
+      <label class="if-chk"><input type="checkbox" class="cmp-be" value="netplan" checked onchange="renderCompare()"> Netplan</label>
+      <label class="if-chk"><input type="checkbox" class="cmp-be" value="networkd" checked onchange="renderCompare()"> networkd</label>
+      <label class="if-chk"><input type="checkbox" class="cmp-be" value="nm" checked onchange="renderCompare()"> NM</label>
     </div>
     <button class="template-button eval-btn" onclick="toggleEval()">⇄ Compare all three</button>
 
@@ -856,22 +884,30 @@ network:
     return [{ path: "/etc/netplan/01-carino.yaml", mode: "yaml", content: fullYaml }];
   }
 
-  function rebuildYamlFromModules() {
+  // Render the file list for ANY backend from the current template/family/module
+  // state, without touching `currentBackend` — so the compare panes can show a
+  // backend the single editor isn't currently on.
+  function filesFor(backend) {
     const t = tier();
-    files = currentBackend === "netplan"
+    return backend === "netplan"
       ? buildNetplanFiles()
-      : CarinoNet.render(currentBackend, {
+      : CarinoNet.render(backend, {
           full: t.full, ref: t.ref, showcase: t.showcase,
           v4: fam4, v6: fam6,
           modules: activeModules(),
           ifaces: ifaces,
         });
+  }
+
+  function rebuildYamlFromModules() {
+    files = filesFor(currentBackend);
     if (activeFile >= files.length) activeFile = 0;
     renderTabs();
     showFile(activeFile);
     document.getElementById("dlAllBtn").classList.toggle("hidden", files.length <= 1);
     errorBox.style.display = "none";
     successBox.style.display = "none";
+    if (compareMode) renderCompare();   // keep the side-by-side panes in sync
     // Every mutation funnels through here, so the share hash rides along.
     updateShareHash();
   }
@@ -915,6 +951,92 @@ network:
     document.querySelectorAll(".template-button[data-be]").forEach(x =>
       x.classList.toggle("active", x.dataset.be === b));
     rebuildYamlFromModules();
+  }
+
+  // ---- side-by-side compare ---------------------------------------------
+  // A read-only CodeMirror per backend, each with its own file-tab bar, so the
+  // same intent can be read as two or three configs at once. The panes are
+  // created lazily (once) and just re-fed on every rebuild.
+  let compareMode = false;
+  const CMP_ORDER = ["netplan", "networkd", "nm"];
+  const CMP_LABEL = { netplan: "Netplan", networkd: "systemd-networkd", nm: "NetworkManager" };
+  const cmpPanes = {};   // backend -> { wrap, tabs, cm, files, active }
+
+  function ensureComparePanes() {
+    if (Object.keys(cmpPanes).length) return;
+    const host = document.getElementById("compareView");
+    CMP_ORDER.forEach(be => {
+      const wrap = document.createElement("div");
+      wrap.className = "cmp-pane"; wrap.dataset.be = be;
+      const head = document.createElement("div");
+      head.className = "cmp-head"; head.textContent = CMP_LABEL[be];
+      const tabs = document.createElement("div");
+      tabs.className = "cmp-tabs file-tabs";
+      const ta = document.createElement("textarea");
+      wrap.append(head, tabs, ta);
+      host.appendChild(wrap);
+      const cm = CodeMirror.fromTextArea(ta, {
+        mode: "yaml", theme: "material-darker",
+        lineNumbers: true, lineWrapping: true, readOnly: true,
+      });
+      cmpPanes[be] = { wrap, tabs, cm, files: [], active: 0 };
+    });
+  }
+
+  function showComparePaneFile(be) {
+    const p = cmpPanes[be];
+    const f = p.files[p.active];
+    if (!f) return;
+    p.cm.setOption("mode", f.mode === "yaml" ? "yaml" : "properties");
+    p.cm.setValue(f.content);
+    p.tabs.querySelectorAll(".file-tab").forEach((t, n) => t.classList.toggle("active", n === p.active));
+    setTimeout(() => p.cm.refresh(), 0);   // size correctly now the pane is visible
+  }
+
+  function renderComparePane(be) {
+    const p = cmpPanes[be];
+    p.files = filesFor(be);
+    if (p.active >= p.files.length) p.active = 0;
+    p.tabs.innerHTML = "";
+    if (p.files.length > 1) {               // netplan is single-file; the others tab
+      p.files.forEach((f, i) => {
+        const b = document.createElement("button");
+        b.className = "file-tab" + (i === p.active ? " active" : "");
+        const cut = f.path.lastIndexOf("/") + 1;
+        const dir = document.createElement("span");
+        dir.className = "dir"; dir.textContent = f.path.slice(0, cut);
+        b.appendChild(dir);
+        b.appendChild(document.createTextNode(f.path.slice(cut)));   // filename may hold user text — never innerHTML
+        b.title = f.path;
+        b.onclick = () => { p.active = i; showComparePaneFile(be); };
+        p.tabs.appendChild(b);
+      });
+    }
+    showComparePaneFile(be);
+  }
+
+  function renderCompare() {
+    ensureComparePanes();
+    let sel = [...document.querySelectorAll(".cmp-be:checked")].map(c => c.value);
+    if (sel.length < 2) {                   // a comparison needs at least two — restore all
+      document.querySelectorAll(".cmp-be").forEach(c => { c.checked = true; });
+      sel = CMP_ORDER.slice();
+    }
+    CMP_ORDER.forEach(be => {
+      const on = sel.includes(be);
+      cmpPanes[be].wrap.hidden = !on;
+      if (on) renderComparePane(be);
+    });
+  }
+
+  function toggleCompare() {
+    compareMode = !compareMode;
+    document.getElementById("cmpToggle").classList.toggle("active", compareMode);
+    document.getElementById("cmpPicker").hidden = !compareMode;
+    document.getElementById("singleView").hidden = compareMode;
+    document.getElementById("compareView").hidden = !compareMode;
+    if (compareMode) renderCompare();
+    else setTimeout(() => editor.refresh(), 0);   // single editor was hidden — re-measure
   }
 
   // Module palette — a device-type grid, rendered like the topology tool's
