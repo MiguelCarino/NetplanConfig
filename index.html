@@ -1531,8 +1531,8 @@ network:
 
   // ---- inbound URL hydration (topology → netplan bridge) ----------------
   // A link like https://netplan.carino.systems/#~<deflate-b64url> (or legacy
-  // plain base64) carries an interface-intent envelope from NetworkTopology.
-  // Codec (both halves): mirror of NetworkTopology js/app.js — keep byte-identical.
+  // plain base64) carries an interface-intent envelope from Topo.
+  // Codec (both halves): mirror of Topo js/app.js — keep byte-identical.
 const FRAG_SCHEME = '~';
 const _canDecompress = typeof DecompressionStream !== 'undefined';
 function _bytesFromB64url(s) {
