@@ -30,36 +30,7 @@
       padding: 0 20px; gap: 12px; z-index: 10;
       font-family: 'IBM Plex Sans', sans-serif;
     }
-    .cs-left { display: flex; align-items: center; gap: 14px; min-width: 0; flex-shrink: 0; }
     .cs-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .cs-page-name {
-      font-family: 'Red Hat Display', sans-serif;
-      font-size: 1.4rem; font-weight: 900; line-height: 1;
-      background: linear-gradient(130deg, #fef08a 0%, #eab308 50%, #b45309 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-      white-space: nowrap;
-    }
-    .cs-info { display: flex; align-items: baseline; gap: 10px; border-left: 1px solid #262626; padding-left: 14px; }
-    .cs-info-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 700; color: #fff; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.06em; }
-    .cs-info-desc { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: #666; white-space: nowrap; }
-    .cs-icon-btn {
-      width: 32px; height: 32px; border: 1px solid #262626; border-radius: 4px;
-      display: flex; align-items: center; justify-content: center;
-      color: #666; transition: 0.2s; text-decoration: none; background: transparent !important; cursor: pointer;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 700;
-      padding: 0 !important;
-    }
-    .cs-icon-btn:hover { border-color: #eab308 !important; color: #050505 !important; background: #eab308 !important; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(234,179,8,0.15); }
-    .cs-icon-btn svg { width: 15px; height: 15px; }
-    .cs-vdiv { width: 1px; height: 22px; background: #262626; flex-shrink: 0; }
-    .cs-select {
-      background: transparent !important; border: 1px solid #262626 !important; color: #a3a3a3 !important;
-      font-family: 'IBM Plex Mono', monospace !important; font-size: 0.65rem !important;
-      padding: 0 8px !important; height: 32px; border-radius: 4px !important; cursor: pointer; outline: none;
-      transition: 0.2s; width: auto !important;
-    }
-    .cs-select:hover, .cs-select:focus { border-color: #eab308 !important; }
-    .cs-select option { background: #111; color: #fff; }
     .cs-btn {
       display: flex !important; align-items: center !important;
       background: transparent !important; border: 1px solid #262626 !important;
@@ -106,7 +77,7 @@
     .modules-section h3 {
       font-family: 'Red Hat Display', sans-serif;
       font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em;
-      color: #e5e5e5; margin: 0 0 0.5rem; text-transform: uppercase;
+      color: #fff; margin: 0 0 0.5rem; text-transform: uppercase;
     }
     .modules-section h3.sub { margin-top: 0.9rem; }
     .modules-section h3 + .tpl-hint { margin-top: -0.2rem; }
@@ -166,18 +137,18 @@
       color: #fff; margin: 0 0 10px;
     }
     .eval-lede {
-      font-size: 0.82rem; line-height: 1.6; color: #b5b5b5; margin: 0 0 16px;
+      font-size: 0.82rem; line-height: 1.6; color: #a3a3a3; margin: 0 0 16px;
       border-left: 2px solid #eab308; padding-left: 12px;
     }
     .eval-scroll { overflow-y: auto; min-height: 0; padding-right: 6px; }
     .eval-h {
       font-family: 'Red Hat Display', sans-serif; font-size: 0.78rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.08em; color: #e5e5e5;
+      text-transform: uppercase; letter-spacing: 0.08em; color: #fff;
       margin: 22px 0 10px;
     }
     .eval-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
     .eval-table th, .eval-table td {
-      text-align: left; padding: 7px 9px; border-bottom: 1px solid #1e1e1e;
+      text-align: left; padding: 7px 9px; border-bottom: 1px solid #262626;
       vertical-align: top; line-height: 1.45;
     }
     .eval-table thead th {
@@ -196,22 +167,22 @@
     }
     .eval-verdict .ev-case {
       font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
-      letter-spacing: 0.07em; color: #6b6b6b;
+      letter-spacing: 0.07em; color: #666;
     }
     .eval-verdict .ev-pick {
       font-family: 'Red Hat Display', sans-serif; font-weight: 900; font-size: 1rem;
       color: #eab308; margin: 2px 0 5px;
     }
-    .eval-verdict .ev-why { font-size: 0.76rem; line-height: 1.55; color: #b5b5b5; }
+    .eval-verdict .ev-why { font-size: 0.76rem; line-height: 1.55; color: #a3a3a3; }
     .eval-gotchas { margin: 0; padding-left: 18px; }
-    .eval-gotchas li { font-size: 0.76rem; line-height: 1.6; color: #b5b5b5; margin-bottom: 8px; }
+    .eval-gotchas li { font-size: 0.76rem; line-height: 1.6; color: #a3a3a3; margin-bottom: 8px; }
     .eval-box code {
       font-family: 'IBM Plex Mono', monospace; font-size: 0.92em;
       background: #161616; border: 1px solid #262626; border-radius: 3px; padding: 1px 4px; color: #eab308;
     }
     .tpl-hint {
       font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
-      color: #6b6b6b; margin: -0.3rem 0 0.75rem; line-height: 1.4;
+      color: #666; margin: -0.3rem 0 0.75rem; line-height: 1.4;
     }
 
     .CodeMirror {
@@ -274,7 +245,7 @@
       border-radius: 4px; padding: 0.3rem; cursor: pointer; flex: 0 0 auto;
     }
     .if-del {
-      background: transparent; border: 1px solid #262626; color: #888;
+      background: transparent; border: 1px solid #262626; color: #a3a3a3;
       border-radius: 4px; cursor: pointer; width: 26px; height: 26px;
       font-size: 1rem; line-height: 1; flex: 0 0 auto; padding: 0;
     }
@@ -306,7 +277,7 @@
     }
     .rt-onlink input { accent-color: #eab308; margin: 0; }
     .rt-del {
-      background: transparent; border: 1px solid #262626; color: #888;
+      background: transparent; border: 1px solid #262626; color: #a3a3a3;
       border-radius: 4px; cursor: pointer; width: 22px; height: 22px;
       font-size: 0.9rem; line-height: 1; flex: 0 0 auto; padding: 0;
     }
@@ -343,7 +314,7 @@
     .template-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.45rem; margin-bottom: 0.6rem; }
     .template-grid .template-button { margin-bottom: 0; text-align: center; padding: 0.55rem 0.4rem; }
 
-    .module-button, .template-button {
+    .template-button {
       display: block;
       width: 100%;
       margin-bottom: 0.5rem;
@@ -360,18 +331,18 @@
       cursor: pointer;
       transition: 0.2s;
     }
-    .module-button:hover, .template-button:hover {
+    .template-button:hover {
       border-color: #eab308;
       color: #eab308;
       background: rgba(234,179,8,0.05);
     }
-    .module-button.active, .template-button.active {
+    .template-button.active {
       background: #eab308;
       border-color: #eab308;
       color: #050505;
       font-weight: 700;
     }
-    .module-button.active:hover, .template-button.active:hover {
+    .template-button.active:hover {
       background: #fbbf24;
       color: #050505;
     }
@@ -1202,7 +1173,7 @@ network:
     });
     // Dim the modules the builder now owns.
     const has = ifaces.length > 0;
-    document.querySelectorAll('.module-node[data-type="ethernets"], .module-button[data-type="wifis"]')
+    document.querySelectorAll('.module-node[data-type="ethernets"], .module-node[data-type="wifis"]')
       .forEach(b => b.classList.toggle("superseded", has));
   }
 
