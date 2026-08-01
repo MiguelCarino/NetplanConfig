@@ -416,12 +416,12 @@
 
 <header class="cs-header">
   <div class="cs-right">
-    <button onclick="toggleSidebar()" class="cs-btn cs-menu" title="Show controls" aria-label="Show controls">☰ Controls</button>
+    <button onclick="toggleSidebar()" class="cs-btn cs-menu" title="Show controls" aria-label="Show controls" data-i18n>☰ Controls</button>
     <span id="navActions" class="nav-actions">
-      <button onclick="validateYaml()" class="cs-btn" title="Validate">Validate</button>
-      <button onclick="copyToClipboard()" class="cs-btn" title="Copy">Copy</button>
-      <button onclick="downloadYaml()" class="cs-btn" title="Download">Download</button>
-      <button onclick="downloadAll()" class="cs-btn hidden" id="dlAllBtn" title="Download all">Download all</button>
+      <button onclick="validateYaml()" class="cs-btn" title="Validate" data-i18n>Validate</button>
+      <button onclick="copyToClipboard()" class="cs-btn" title="Copy" data-i18n>Copy</button>
+      <button onclick="downloadYaml()" class="cs-btn" title="Download" data-i18n>Download</button>
+      <button onclick="downloadAll()" class="cs-btn hidden" id="dlAllBtn" title="Download all" data-i18n>Download all</button>
     </span>
   </div>
 </header>
@@ -436,54 +436,54 @@
     <div class="toast-stack">
       <div id="warnBox" class="warn" style="display: none;"></div>
       <div id="errorBox" class="error" style="display: none;"></div>
-      <div id="successBox" class="success" style="display: none;">✔ No problems found.</div>
+      <div id="successBox" class="success" style="display: none;" data-i18n>✔ No problems found.</div>
     </div>
   </div>
   <div class="modules-section">
     <div id="mobileActionsSection">
-      <h3>Actions</h3>
+      <h3 data-i18n>Actions</h3>
       <div id="mobileActions" class="sidebar-actions"></div>
     </div>
 
-    <h3>Backend</h3>
+    <h3 data-i18n>Backend</h3>
     <div class="tpl-hint" id="backendHint"></div>
     <div class="backend-grid">
       <button class="template-button active" data-be="netplan"  onclick="setBackend('netplan')">Netplan</button>
       <button class="template-button"        data-be="networkd" onclick="setBackend('networkd')">networkd</button>
       <button class="template-button"        data-be="nm"       onclick="setBackend('nm')">Network<wbr>Manager</button>
     </div>
-    <button class="template-button cmp-btn" id="cmpToggle" onclick="toggleCompare()">⬌ Side-by-side configs</button>
+    <button class="template-button cmp-btn" id="cmpToggle" onclick="toggleCompare()" data-i18n>⬌ Side-by-side configs</button>
     <div class="cmp-picker" id="cmpPicker" hidden>
       <label class="if-chk"><input type="checkbox" class="cmp-be" value="netplan" checked onchange="renderCompare()"> Netplan</label>
       <label class="if-chk"><input type="checkbox" class="cmp-be" value="networkd" checked onchange="renderCompare()"> networkd</label>
       <label class="if-chk"><input type="checkbox" class="cmp-be" value="nm" checked onchange="renderCompare()"> NM</label>
     </div>
-    <button class="template-button eval-btn" onclick="toggleEval()">⇄ Compare all three</button>
+    <button class="template-button eval-btn" onclick="toggleEval()" data-i18n>⇄ Compare all three</button>
 
-    <h3>Template</h3>
+    <h3 data-i18n>Template</h3>
     <div class="tpl-hint" id="tplHint"></div>
     <div class="template-grid" id="templateGrid"></div>
 
-    <h3 class="sub">Address families</h3>
+    <h3 class="sub" data-i18n>Address families</h3>
     <div class="fam-row">
       <label class="if-chk"><input type="checkbox" id="famV4" checked onchange="setFamily()"> IPv4</label>
       <label class="if-chk"><input type="checkbox" id="famV6" onchange="setFamily()"> IPv6</label>
     </div>
 
-    <h3 class="sub">Modules</h3>
-    <div class="tpl-hint">Click a device type to include its example. Ethernet and Wi-Fi are on by default.</div>
+    <h3 class="sub" data-i18n>Modules</h3>
+    <div class="tpl-hint" data-i18n>Click a device type to include its example. Ethernet and Wi-Fi are on by default.</div>
     <div class="module-grid" id="moduleGrid"></div>
 
-    <h3 class="sub">Load an example</h3>
+    <h3 class="sub" data-i18n>Load an example</h3>
     <select id="exampleSel" class="if-type" onchange="loadExample(this.value)" style="width:100%; padding:0.4rem;" title="A canonical netplan scenario — replaces your current setup, comparable across all three backends.">
       <option value="">Load example…</option>
     </select>
 
     <div class="iface-region">
-      <h3 class="sub">Interfaces</h3>
-      <div class="tpl-hint">Your real NICs — replace the Ethernet/Wi-Fi examples.</div>
+      <h3 class="sub" data-i18n>Interfaces</h3>
+      <div class="tpl-hint" data-i18n>Your real NICs — replace the Ethernet/Wi-Fi examples.</div>
       <div id="ifaceList"></div>
-      <button class="template-button" id="addIfaceBtn" onclick="addIface()">+ Add interface</button>
+      <button class="template-button" id="addIfaceBtn" onclick="addIface()" data-i18n>+ Add interface</button>
     </div>
   </div>
 </div>
@@ -495,13 +495,13 @@
 <div id="evalOverlay" class="eval-overlay" onclick="if(event.target===this)toggleEval()">
   <div class="eval-box">
     <button class="eval-close" onclick="toggleEval()" title="Close">&times;</button>
-    <h2>Which one should run this machine?</h2>
+    <h2 data-i18n>Which one should run this machine?</h2>
     <p class="eval-lede" id="evalLede"></p>
     <div class="eval-scroll">
       <table class="eval-table" id="evalTable"></table>
-      <h3 class="eval-h">Pick by what the box is</h3>
+      <h3 class="eval-h" data-i18n>Pick by what the box is</h3>
       <div id="evalVerdicts"></div>
-      <h3 class="eval-h">Traps worth knowing</h3>
+      <h3 class="eval-h" data-i18n>Traps worth knowing</h3>
       <ul class="eval-gotchas" id="evalGotchas"></ul>
     </div>
   </div>
@@ -1158,7 +1158,7 @@ network:
     const sc = SCENARIOS[key];
     if (!sc) { if (sel) sel.value = ""; return; }
     const dirty = ifaces.length || document.querySelectorAll('.module-node.active').length;
-    if (dirty && !confirm('Load “' + sc.label + '”?\nThis replaces your current interfaces and module selection.')) {
+    if (dirty && !confirm(t('Load this example?') + '\n“' + t(sc.label) + '”\n' + t('This replaces your current interfaces and module selection.'))) {
       sel.value = ""; return;
     }
     document.getElementById("famV4").checked = fam4 = sc.fam[0];
@@ -1556,7 +1556,7 @@ network:
     } catch (e) {
       successBox.style.display = "none";
       errorBox.style.display = "block";
-      errorBox.textContent = (currentBackend === "netplan" ? "YAML Error: " : "INI Error: ") + e.message;
+      errorBox.textContent = (currentBackend === "netplan" ? t("YAML Error:") : t("INI Error:")) + " " + e.message;
     }
   }
 
@@ -1737,6 +1737,7 @@ async function encodeShareFragment(json) {
 
 <script src="carino-navbar.js" data-app="Netplan" defer></script>
 <script src="carino-lang.js" defer></script>
+<script src="i18n.js" defer></script>
 <script src="carino-diag.js" defer></script>
 </body>
 </html>
