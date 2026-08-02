@@ -8,6 +8,10 @@
 
 const I18N = {
     es: {
+        'Late shift.': 'Turno nocturno.',
+        'Good morning.': 'Buenos días.',
+        'Good afternoon.': 'Buenas tardes.',
+        'Good evening.': 'Buenas noches.',
         // Header / actions
         '☰ Controls': '☰ Controles',
         'Validate': 'Validar',
@@ -93,6 +97,10 @@ const I18N = {
         'INI Error:': 'Error de INI:',
     },
     'pt-BR': {
+        'Late shift.': 'Turno da noite.',
+        'Good morning.': 'Bom dia.',
+        'Good afternoon.': 'Boa tarde.',
+        'Good evening.': 'Boa noite.',
         '☰ Controls': '☰ Controles',
         'Validate': 'Validar',
         'Copy': 'Copiar',
@@ -169,6 +177,10 @@ const I18N = {
         'INI Error:': 'Erro de INI:',
     },
     ja: {
+        'Late shift.': '夜勤お疲れさま。',
+        'Good morning.': 'おはようございます。',
+        'Good afternoon.': 'こんにちは。',
+        'Good evening.': 'こんばんは。',
         '☰ Controls': '☰ 操作',
         'Validate': '検証',
         'Copy': 'コピー',
@@ -245,6 +257,10 @@ const I18N = {
         'INI Error:': 'INIエラー:',
     },
     ru: {
+        'Late shift.': 'Ночная смена.',
+        'Good morning.': 'Доброе утро.',
+        'Good afternoon.': 'Добрый день.',
+        'Good evening.': 'Добрый вечер.',
         '☰ Controls': '☰ Панель',
         'Validate': 'Проверить',
         'Copy': 'Копировать',
