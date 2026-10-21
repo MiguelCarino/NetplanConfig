@@ -3,6 +3,8 @@
 Describe a network setup once, then read it back as **netplan**, **systemd-networkd**
 or **NetworkManager** → **[netplan.carino.systems](https://netplan.carino.systems)**
 
+![Linux Network Config Creator](screenshot.webp)
+
 Everything runs in the browser. Nothing is uploaded, and nothing here touches a
 machine — the output is text you copy.
 
@@ -82,6 +84,8 @@ has an automatic rollback.
 
 Third-party code (CodeMirror, js-yaml) is vendored under [`vendor/`](vendor/)
 with its own MIT licences — see [vendor/README.md](vendor/README.md).
+
+**Related tools:** [Topo](https://topo.carino.systems/) · [Ping](https://ping.carino.systems/) · [Hardware](https://hardware.carino.systems/)
 
 ## Licensing
 
