@@ -31,73 +31,36 @@
   <link rel="stylesheet" href="vendor/codemirror-5.65.13.min.css">
   <link rel="stylesheet" href="vendor/codemirror-theme-material-darker.min.css">
   <link rel="stylesheet" href="fonts/carino-fonts.css">
+  <link rel="stylesheet" href="carino-ui.css">
   <style>
+    /* Tokens and shared components (.ws shell, .cs-btn, .alert, .modal,
+       .dropzone, short hero, privacy line) come from carino-ui.css. */
     html, body { height: 100%; }
-    body {
-      background-color: #050505;
-      color: #e0e0e0;
-      font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-    }
+    body { margin: 0; padding: 0; display: flex; flex-direction: column; }
 
-    /* === Carino Systems Header === */
-    .cs-header {
-      height: 70px; flex-shrink: 0;
-      background: linear-gradient(180deg, #0f0f0f 0%, #050505 100%);
-      border-bottom: 1px solid #262626;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 20px; gap: 12px; z-index: 10;
-      font-family: 'IBM Plex Sans', sans-serif;
-    }
+    /* App actions ride in the navbar (carino-navbar.js moves them there). */
     .cs-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .cs-btn {
-      display: flex !important; align-items: center !important;
-      background: transparent !important; border: 1px solid #262626 !important;
-      color: #a3a3a3 !important; font-family: 'IBM Plex Mono', monospace !important;
-      font-size: 0.65rem !important; text-transform: uppercase; letter-spacing: 0.06em;
-      padding: 0 10px !important; height: 32px !important; border-radius: 4px !important;
-      cursor: pointer; transition: 0.2s; white-space: nowrap;
-    }
-    .cs-btn:hover { border-color: #eab308 !important; color: #eab308 !important; background: rgba(234,179,8,0.05) !important; }
-    /* Beats the .cs-btn `display:flex !important` base, which an inline
-       display:none can't (an !important stylesheet rule outranks inline). */
-    .cs-btn.hidden { display: none !important; }
+    .cs-btn.hidden { display: none; }
 
-    .layout {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0;
-      padding: 0;          /* editor + sidebar span the full page height */
-      align-items: stretch;
-    }
+    /* .ws shell: the settings rail (.modules-section) on the left, the
+       editor pane filling the rest; carino-ui.js turns the rail into a
+       drawer at 900px and below. */
+    .layout { flex: 1; min-height: 0; }
 
     .editor-section {
-      flex: 2;
-      min-width: 320px;
       min-height: 0;
       display: flex;
       flex-direction: column;
       position: relative;  /* containing block for the hovering toasts */
       padding: 0.7rem;
+      overflow: hidden;
     }
-    .modules-section {
-      flex: 1;
-      min-width: 250px;
-      max-width: 330px;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;   /* the sidebar itself never scrolls */
-      padding: 1rem;
-      border-right: 1px solid #262626;
-    }
+    .modules-section { gap: 0; }
+    .modules-section > .rail-head { margin-bottom: 0.9rem; }
+    .open-zone { padding: 12px; margin-bottom: 0.9rem; font-size: var(--fs-sm); }
+    .open-zone .dz-hint { margin-top: 4px; }
     .modules-section h3 {
-      font-family: 'Red Hat Display', sans-serif;
+      font-family: var(--display);
       font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em;
       color: #fff; margin: 0 0 0.5rem; text-transform: uppercase;
     }
@@ -113,9 +76,8 @@
 
     /* Interfaces take the remaining height; only their LIST scrolls, so the
        fixed controls above stay put and the sidebar never scrolls. */
-    .iface-region { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
-    .iface-region #ifaceList { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-bottom: 0.5rem; }
-    .iface-region #addIfaceBtn { flex: 0 0 auto; }
+    .iface-region { display: flex; flex-direction: column; }
+    .iface-region #ifaceList { margin-bottom: 0.5rem; }
 
     /* ---- file tabs: networkd and NM emit several files, netplan one ---- */
     .file-tabs {
@@ -124,18 +86,18 @@
     }
     .file-tabs:empty { display: none; }
     .file-tab {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem;
-      background: #0f0f0f; border: 1px solid #262626; color: #8a8a8a;
+      font-family: var(--mono); font-size: 0.6rem;
+      background: #0f0f0f; border: 1px solid var(--border); color: var(--text-muted);
       padding: 5px 9px; border-radius: 4px 4px 0 0; cursor: pointer;
       transition: 0.15s; white-space: nowrap; max-width: 100%;
       overflow: hidden; text-overflow: ellipsis;
     }
-    .file-tab:hover { border-color: #eab308; color: #eab308; }
-    .file-tab.active { background: #eab308; border-color: #eab308; color: #050505; font-weight: 700; }
+    .file-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .file-tab.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
     .file-tab .dir { opacity: 0.55; }
     .eval-btn { margin-top: 0.4rem; border-style: dashed !important; }
     .cmp-btn { margin-top: 0.4rem; }
-    .cmp-btn.active { background: #eab308; border-color: #eab308; color: #050505; font-weight: 700; }
+    .cmp-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
     .cmp-picker { display: flex; gap: 0.8rem; flex-wrap: wrap; margin: 0.45rem 0 0.1rem; }
     .cmp-picker[hidden] { display: none; }
 
@@ -147,82 +109,61 @@
     .cmp-pane { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     .cmp-pane[hidden] { display: none; }
     .cmp-head {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
-      letter-spacing: 0.06em; color: #eab308; padding: 1px 2px 6px; flex-shrink: 0;
+      font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--accent); padding: 1px 2px 6px; flex-shrink: 0;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .cmp-pane .CodeMirror { font-size: 0.78rem; }
     @media (max-width: 720px) { #compareView { flex-direction: column; } }
 
-    /* ---- Evaluate overlay ---- */
-    .eval-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
-      display: none; align-items: center; justify-content: center;
-      z-index: 2147483002; padding: 24px;
-    }
-    .eval-overlay.open { display: flex; }
-    .eval-box {
-      background: #0b0b0b; border: 1px solid rgba(234,179,8,0.45); border-radius: 8px;
-      width: min(980px, 100%); max-height: 88vh; padding: 26px 28px 22px;
-      position: relative; display: flex; flex-direction: column; min-height: 0;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.85);
-    }
-    .eval-close {
-      position: absolute; top: 12px; right: 14px; background: transparent;
-      border: none; color: #8a8a8a; font-size: 1.6rem; line-height: 1;
-      cursor: pointer; padding: 0 4px;
-    }
-    .eval-close:hover { color: #eab308; }
-    .eval-box h2 {
-      font-family: 'Red Hat Display', sans-serif; font-size: 1.25rem; font-weight: 900;
-      color: #fff; margin: 0 0 10px;
-    }
+    /* ---- Evaluate dialog: Branding .modal, wider, over the navbar ---- */
+    #evalOverlay { z-index: 2147483002; }
+    .eval-box { max-width: 980px; max-height: 88vh; }
     .eval-lede {
-      font-size: 0.82rem; line-height: 1.6; color: #a3a3a3; margin: 0 0 16px;
-      border-left: 2px solid #eab308; padding-left: 12px;
+      font-size: 0.82rem; line-height: 1.6; color: var(--text-sec); margin: 0 0 16px;
+      border-left: 2px solid var(--accent); padding-left: 12px;
     }
-    .eval-scroll { overflow-y: auto; min-height: 0; padding-right: 6px; }
     .eval-h {
-      font-family: 'Red Hat Display', sans-serif; font-size: 0.78rem; font-weight: 700;
+      font-family: var(--display); font-size: 0.78rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.08em; color: #fff;
       margin: 22px 0 10px;
     }
     .eval-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
     .eval-table th, .eval-table td {
-      text-align: left; padding: 7px 9px; border-bottom: 1px solid #262626;
+      text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border);
       vertical-align: top; line-height: 1.45;
     }
     .eval-table thead th {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
-      letter-spacing: 0.07em; color: #eab308; border-bottom: 1px solid #333;
+      font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--accent); border-bottom: 1px solid #333;
     }
     .eval-table tbody th {
-      font-weight: 500; color: #8a8a8a; white-space: nowrap;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      font-weight: 500; color: var(--text-muted); white-space: nowrap;
+      font-family: var(--mono); font-size: 0.65rem;
     }
     .eval-table td { color: #d4d4d4; }
     .eval-table .yes { color: #86efac; }
     .eval-table .no  { color: #fca5a5; }
     .eval-verdict {
-      border: 1px solid #262626; border-radius: 6px; padding: 12px 14px; margin-bottom: 9px;
+      border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 9px;
     }
     .eval-verdict .ev-case {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase;
+      font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
       letter-spacing: 0.07em; color: #666;
     }
     .eval-verdict .ev-pick {
-      font-family: 'Red Hat Display', sans-serif; font-weight: 900; font-size: 1rem;
-      color: #eab308; margin: 2px 0 5px;
+      font-family: var(--display); font-weight: 900; font-size: 1rem;
+      color: var(--accent); margin: 2px 0 5px;
     }
-    .eval-verdict .ev-why { font-size: 0.76rem; line-height: 1.55; color: #a3a3a3; }
+    .eval-verdict .ev-why { font-size: 0.76rem; line-height: 1.55; color: var(--text-sec); }
     .eval-gotchas { margin: 0; padding-left: 18px; }
-    .eval-gotchas li { font-size: 0.76rem; line-height: 1.6; color: #a3a3a3; margin-bottom: 8px; }
+    .eval-gotchas li { font-size: 0.76rem; line-height: 1.6; color: var(--text-sec); margin-bottom: 8px; }
     .eval-box code {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.92em;
-      background: #161616; border: 1px solid #262626; border-radius: 3px; padding: 1px 4px; color: #eab308;
+      font-family: var(--mono); font-size: 0.92em;
+      background: #161616; border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px; color: var(--accent);
     }
     .tpl-hint {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      font-family: var(--mono); font-size: 0.62rem;
       color: #666; margin: -0.3rem 0 0.75rem; line-height: 1.4;
     }
 
@@ -230,9 +171,9 @@
       flex: 1 1 0;
       min-height: 0;
       overflow: auto;
-      border: 1px solid #262626;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--mono);
       font-size: 0.85rem;
     }
     .CodeMirror-scroll { overflow-y: auto !important; }
@@ -244,69 +185,62 @@
       display: flex; flex-direction: column; align-items: flex-end; gap: 0.6rem;
       pointer-events: none; z-index: 60; max-width: min(500px, calc(100vw - 3rem));
     }
-    .error, .success, .warn {
-      pointer-events: auto;
-      max-width: min(500px, 100%);
-      padding: 0.7rem 0.9rem;
-      border-radius: 8px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.76rem;
-      line-height: 1.5;
-      border: 1px solid;
+    /* Branding .alert states, floating: opaque so the editor does not show through. */
+    .toast-stack .alert {
+      pointer-events: auto; margin: 0; max-width: min(500px, 100%);
       box-shadow: 0 14px 38px rgba(0,0,0,0.6);
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
       animation: toast-in 0.22s ease;
     }
     @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-    .error { color:#fca5a5; background:rgba(28,10,10,0.95); border-color:rgba(239,68,68,0.6); }
-    .success { color:#86efac; background:rgba(9,24,14,0.95); border-color:rgba(34,197,94,0.6); }
-    .warn { color:#fcd34d; background:rgba(26,22,6,0.95); border-color:rgba(234,179,8,0.6); }
-    .warn code { background:#1a1a1a; padding:1px 5px; border-radius:3px; color:#fde68a; }
-    .warn b { color:#fde68a; }
-    .warn .warn-sep { border:none; border-top:1px solid rgba(234,179,8,0.3); margin:0.6rem 0; }
+    @media (prefers-reduced-motion: reduce) { .toast-stack .alert { animation: none; } }
+    .toast-stack .alert.err  { background: rgba(28,10,10,0.95); }
+    .toast-stack .alert.ok   { background: rgba(9,24,14,0.95); }
+    .toast-stack .alert.warn { background: rgba(26,22,6,0.95); }
+    .alert .warn-sep { border:none; border-top:1px solid rgba(234,179,8,0.3); margin:0.6rem 0; }
 
     /* --- custom interface builder --- */
     .iface-card {
-      border: 1px solid #262626; border-radius: 5px;
+      border: 1px solid var(--border); border-radius: 5px;
       padding: 0.55rem; margin-bottom: 0.6rem;
       display: flex; flex-direction: column; gap: 0.4rem;
       background: rgba(255,255,255,0.02);
     }
     .iface-head { display: flex; gap: 0.35rem; align-items: center; }
     .iface-card input[type=text], .if-addr, .if-name, .if-ssid, .if-psk {
-      background: #0d0d0d; border: 1px solid #262626; border-radius: 4px;
-      color: #e0e0e0; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
+      background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); font-family: var(--mono); font-size: 0.68rem;
       padding: 0.35rem 0.45rem; width: 100%; box-sizing: border-box;
     }
-    .iface-card input:focus, .if-type:focus { outline: none; border-color: #eab308; }
+    .iface-card input:focus, .if-type:focus { outline: none; border-color: var(--accent); }
     .if-name { flex: 1 1 auto; min-width: 0; }
     .if-type {
-      background: #0d0d0d; border: 1px solid #262626; color: #a3a3a3;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      background: var(--bg-elev); border: 1px solid var(--border); color: var(--text-sec);
+      font-family: var(--mono); font-size: 0.65rem;
       border-radius: 4px; padding: 0.3rem; cursor: pointer; flex: 0 0 auto;
     }
     .if-del {
-      background: transparent; border: 1px solid #262626; color: #a3a3a3;
+      background: transparent; border: 1px solid var(--border); color: var(--text-sec);
       border-radius: 4px; cursor: pointer; width: 26px; height: 26px;
       font-size: 1rem; line-height: 1; flex: 0 0 auto; padding: 0;
     }
-    .if-del:hover { border-color: #ef4444; color: #ef4444; }
+    .if-del:hover { border-color: var(--err); color: var(--err); }
     .if-opts { display: flex; gap: 0.8rem; }
     .if-chk {
       display: flex; align-items: center; gap: 0.3rem;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem;
-      color: #a3a3a3; text-transform: uppercase; cursor: pointer;
+      font-family: var(--mono); font-size: 0.64rem;
+      color: var(--text-sec); text-transform: uppercase; cursor: pointer;
     }
-    .if-chk input { accent-color: #eab308; margin: 0; }
+    .if-chk input { accent-color: var(--accent); margin: 0; }
     .fam-row { display: flex; gap: 1.4rem; margin-bottom: 0.6rem; }
     .fam-row .if-chk { font-size: 0.72rem; }
     .if-wifi { display: flex; flex-direction: column; gap: 0.35rem; }
     .if-addroute {
-      background: transparent; border: 1px dashed #333; color: #a3a3a3;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      background: transparent; border: 1px dashed #333; color: var(--text-sec);
+      font-family: var(--mono); font-size: 0.62rem;
       border-radius: 4px; padding: 0.3rem; cursor: pointer; width: 100%;
     }
-    .if-addroute:hover { border-color: #eab308; color: #eab308; }
+    .if-addroute:hover { border-color: var(--accent); color: var(--accent); }
     .if-routes { display: flex; flex-direction: column; gap: 0.3rem; }
     .route-row { display: flex; gap: 0.3rem; align-items: center; }
     .route-row .rt-to { flex: 2 1 0; min-width: 0; }
@@ -314,15 +248,15 @@
     .route-row .rt-metric { flex: 1 1 0; min-width: 0; }
     .rt-onlink {
       display: flex; align-items: center; gap: 0.25rem; flex: 0 0 auto;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: #a3a3a3; cursor: pointer;
+      font-family: var(--mono); font-size: 0.6rem; color: var(--text-sec); cursor: pointer;
     }
-    .rt-onlink input { accent-color: #eab308; margin: 0; }
+    .rt-onlink input { accent-color: var(--accent); margin: 0; }
     .rt-del {
-      background: transparent; border: 1px solid #262626; color: #a3a3a3;
+      background: transparent; border: 1px solid var(--border); color: var(--text-sec);
       border-radius: 4px; cursor: pointer; width: 22px; height: 22px;
       font-size: 0.9rem; line-height: 1; flex: 0 0 auto; padding: 0;
     }
-    .rt-del:hover { border-color: #ef4444; color: #ef4444; }
+    .rt-del:hover { border-color: var(--err); color: var(--err); }
     /* Module node grid — a palette of device types, like the topology tool. */
     .module-grid {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem;
@@ -330,9 +264,9 @@
     }
     .module-node {
       display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
-      background: #0d0d0d; border: 1px solid #262626; border-radius: 6px;
-      color: #a3a3a3; cursor: pointer; padding: 0.6rem 0.3rem;
-      font-family: 'IBM Plex Mono', monospace; transition: 0.15s;
+      background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text-sec); cursor: pointer; padding: 0.6rem 0.3rem;
+      font-family: var(--mono); transition: 0.15s;
       position: relative; text-align: center;
     }
     .module-node svg { width: 24px; height: 24px; stroke: currentColor; fill: none;
@@ -340,11 +274,11 @@
     .module-node .mn-label {
       font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.1;
     }
-    .module-node:hover { border-color: #eab308; color: #eab308; background: rgba(234,179,8,0.06); }
+    .module-node:hover { border-color: var(--accent); color: var(--accent); background: rgba(234,179,8,0.06); }
     .module-node.active {
-      background: #eab308; border-color: #eab308; color: #050505; font-weight: 700;
+      background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700;
     }
-    .module-node.active:hover { background: #fbbf24; color: #050505; }
+    .module-node.active:hover { background: #fbbf24; color: var(--bg); }
     .module-node.active::after {
       content: "✓"; position: absolute; top: 3px; right: 5px; font-size: 0.6rem; font-weight: 700;
     }
@@ -361,10 +295,10 @@
       margin-bottom: 0.5rem;
       text-align: left;
       background: transparent;
-      border: 1px solid #262626;
+      border: 1px solid var(--border);
       border-radius: 4px;
-      color: #a3a3a3;
-      font-family: 'IBM Plex Mono', monospace;
+      color: var(--text-sec);
+      font-family: var(--mono);
       font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -373,102 +307,76 @@
       transition: 0.2s;
     }
     .template-button:hover {
-      border-color: #eab308;
-      color: #eab308;
-      background: rgba(234,179,8,0.05);
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-faint);
     }
     .template-button.active {
-      background: #eab308;
-      border-color: #eab308;
-      color: #050505;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
       font-weight: 700;
     }
     .template-button.active:hover {
       background: #fbbf24;
-      color: #050505;
+      color: var(--bg);
     }
 
-    /* ---- Sidebar on the LEFT, editor on the right ---- */
-    .modules-section { order: 1; }
-    .editor-section { order: 2; }
-
     /* App action buttons: a flex row in the navbar on desktop. The ☰ drawer
-       toggle and the drawer "Actions" section are mobile-only. */
+       toggle (.ws-toggle) and the drawer "Actions" section are drawer-only. */
     .nav-actions { display: flex; gap: 8px; align-items: center; }
-    .cs-menu { display: none !important; }
     #mobileActionsSection { display: none; }
-    #sidebarScrim { display: none; }
+    /* Phones: the ☰ alone, so the brand keeps its room beside Sys. Status. */
+    @media (max-width: 640px) { .ws-toggle-lbl { display: none; } }
 
-    /* ---- Mobile: sidebar becomes a slide-in drawer under the 60px navbar ---- */
-    @media (max-width: 860px) {
-      .modules-section {
-        position: fixed; top: 60px; left: 0; bottom: 0;
-        width: min(340px, 86vw); max-width: none; z-index: 1500;
-        transform: translateX(-100%); transition: transform 0.25s ease;
-        overflow-y: auto; background: #0a0a0a;
-        border-right: 1px solid #262626; box-shadow: 6px 0 24px rgba(0,0,0,0.6);
-        padding: 1rem 1rem 1.5rem;
-      }
-      .modules-section.open { transform: translateX(0); }
-      /* Whole drawer scrolls on mobile — drop the inner interface-list scroll. */
-      .iface-region { flex: 0 0 auto; }
-      .iface-region #ifaceList { overflow: visible; flex: 0 0 auto; }
-      .editor-section { order: 1; min-width: 0; }
-      .layout { padding: 0.75rem; gap: 0; }
-
-      #sidebarScrim {
-        display: block; position: fixed; inset: 60px 0 0 0;
-        background: rgba(0,0,0,0.55); z-index: 1400;
-        opacity: 0; pointer-events: none; transition: opacity 0.25s;
-      }
-      #sidebarScrim.open { opacity: 1; pointer-events: auto; }
-
+    /* ---- 900px and below: the rail is a drawer (carino-ui.js) ---- */
+    @media (max-width: 900px) {
+      .editor-section { padding: 0.5rem; }
       /* Navbar keeps only the ☰ toggle; the real actions move into the drawer's
          "Actions" section (relocated by syncNavActions), laid out as a grid. */
-      .cs-menu { display: inline-flex !important; }
-      #mobileActionsSection { display: block; }
+      #mobileActionsSection { display: block; margin-bottom: 0.6rem; }
       .sidebar-actions .nav-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.45rem; }
-      .sidebar-actions .cs-btn { width: 100% !important; justify-content: center !important; height: 34px !important; }
+      .sidebar-actions .cs-btn { width: 100%; justify-content: center; height: 34px; }
     }
     /* Tiny phones: shed the social icons so the ☰ + common items stay roomy. */
     @media (max-width: 520px) { #carinoNav .social-row { display: none; } }
-    /* The vendored material-darker theme greys comments to #545454 on #212121 (2.1:1). */
+    /* The vendored material-darker theme: the fleet's surface instead of its
+       grey #212121, and comments lifted from #545454 (2.1:1) to --text-muted. */
+    .cm-s-material-darker.CodeMirror,
+    .cm-s-material-darker .CodeMirror-gutters { background: var(--bg-elev); }
     .cm-s-material-darker .cm-comment,
-    .cm-s-material-darker .CodeMirror-linenumber { color: #8a8a8a; }
+    .cm-s-material-darker .CodeMirror-linenumber { color: var(--text-muted); }
   </style>
 </head>
 <body>
 
-<header class="cs-header">
-  <div class="cs-right">
-    <button onclick="toggleSidebar()" class="cs-btn cs-menu" title="Show controls" aria-label="Show controls" data-i18n>☰ Controls</button>
-    <span id="navActions" class="nav-actions">
-      <button onclick="validateYaml()" class="cs-btn" title="Validate" data-i18n>Validate</button>
-      <button onclick="copyToClipboard()" class="cs-btn" title="Copy" data-i18n>Copy</button>
-      <button onclick="downloadYaml()" class="cs-btn" title="Download" data-i18n>Download</button>
-      <button onclick="downloadAll()" class="cs-btn hidden" id="dlAllBtn" title="Download all" data-i18n>Download all</button>
-    </span>
-  </div>
-</header>
+<div class="cs-right" data-carino-actions>
+  <button type="button" class="cs-btn ws-toggle cs-menu" data-ws-toggle data-priority="1" title="Show controls" aria-label="Show controls">☰ <span class="ws-toggle-lbl" data-i18n>Controls</span></button>
+  <span id="navActions" class="nav-actions">
+    <button onclick="validateYaml()" class="cs-btn" title="Validate" data-i18n>Validate</button>
+    <button onclick="copyToClipboard()" class="cs-btn" title="Copy" data-i18n>Copy</button>
+    <button onclick="downloadYaml()" class="cs-btn" data-priority="1" title="Download" data-i18n>Download</button>
+    <button onclick="downloadAll()" class="cs-btn hidden" id="dlAllBtn" title="Download all" data-i18n>Download all</button>
+  </span>
+</div>
 
-<div class="layout" role="main">
-  <div class="editor-section">
-    <div id="singleView">
-      <div id="fileTabs" class="file-tabs"></div>
-      <textarea id="yamlEditor"></textarea>
+<div class="layout ws" role="main">
+  <aside class="modules-section ws-rail" aria-label="Controls">
+    <div class="short-hero rail-head">
+      <img class="mark" src="logo.svg" alt="" width="32" height="32">
+      <div><h1>Netplan Configurator</h1><p class="sh-lede" data-i18n>Build Linux network configs for netplan, systemd-networkd or NetworkManager.</p></div>
     </div>
-    <div id="compareView" hidden></div>
-    <div class="toast-stack">
-      <div id="warnBox" class="warn" style="display: none;"></div>
-      <div id="errorBox" class="error" style="display: none;"></div>
-      <div id="successBox" class="success" style="display: none;" data-i18n>✔ No problems found.</div>
-    </div>
-  </div>
-  <div class="modules-section">
+
     <div id="mobileActionsSection">
       <h3 data-i18n>Actions</h3>
       <div id="mobileActions" class="sidebar-actions"></div>
     </div>
+
+    <div class="dropzone open-zone" id="openZone" role="button" tabindex="0">
+      <div><span data-i18n>Drop a netplan .yaml here or</span> <strong data-i18n>browse</strong></div>
+      <div class="dz-hint" data-i18n>Opens in the editor to check it</div>
+    </div>
+    <input type="file" id="openFile" accept=".yaml,.yml,text/yaml,application/yaml" hidden>
 
     <h3 data-i18n>Backend</h3>
     <div class="tpl-hint" id="backendHint"></div>
@@ -510,19 +418,34 @@
       <div id="ifaceList"></div>
       <button class="template-button" id="addIfaceBtn" onclick="addIface()" data-i18n>+ Add interface</button>
     </div>
+
+    <div class="ws-rail-foot">
+      <p class="privacy-line"><span><span data-i18n>Runs in your browser. Nothing you add here is uploaded.</span> <span class="pl-also" data-i18n>Sys. Status asks ipify, icanhazip, ident.me, Cloudflare, ipwho.is and ipinfo.io for your IP address, only when you open it.</span></span></p>
+    </div>
+  </aside>
+  <div class="editor-section ws-pane">
+    <div id="singleView">
+      <div id="fileTabs" class="file-tabs"></div>
+      <textarea id="yamlEditor"></textarea>
+    </div>
+    <div id="compareView" hidden></div>
+    <div class="toast-stack">
+      <div id="warnBox" class="alert warn" style="display: none;"></div>
+      <div id="errorBox" class="alert err" style="display: none;"></div>
+      <div id="successBox" class="alert ok" style="display: none;" data-i18n>✔ No problems found.</div>
+    </div>
   </div>
 </div>
 
-<!-- Scrim behind the mobile controls drawer -->
-<div id="sidebarScrim" onclick="toggleSidebar()"></div>
-
-<!-- Evaluate overlay: how the three actually compare -->
-<div id="evalOverlay" class="eval-overlay" onclick="if(event.target===this)toggleEval()">
-  <div class="eval-box">
-    <button class="eval-close" onclick="toggleEval()" title="Close">&times;</button>
-    <h2 data-i18n>Which one should run this machine?</h2>
-    <p class="eval-lede" id="evalLede"></p>
-    <div class="eval-scroll">
+<!-- Evaluate dialog: how the three actually compare -->
+<div id="evalOverlay" class="modal-scrim" hidden onclick="if(event.target===this)toggleEval()">
+  <div class="modal eval-box" role="dialog" aria-modal="true" aria-labelledby="evalTitle">
+    <div class="modal-head">
+      <div class="modal-title" id="evalTitle" data-i18n>Which one should run this machine?</div>
+      <button class="modal-x" onclick="toggleEval()" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="eval-lede" id="evalLede"></p>
       <table class="eval-table" id="evalTable"></table>
       <h3 class="eval-h" data-i18n>Pick by what the box is</h3>
       <div id="evalVerdicts"></div>
@@ -1108,22 +1031,12 @@ network:
     rebuildYamlFromModules();
   }
 
-  // Mobile controls drawer: slide the sidebar in/out, dim the editor behind it.
-  function toggleSidebar(force) {
-    const sb = document.querySelector(".modules-section");
-    const sc = document.getElementById("sidebarScrim");
-    const open = force === undefined ? !sb.classList.contains("open") : force;
-    sb.classList.toggle("open", open);
-    sc.classList.toggle("open", open);
-  }
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") toggleSidebar(false);
-  });
+  // The controls drawer itself (☰, scrim, Esc) is carino-ui.js's .ws drawer.
 
   // The extra navbar actions (Validate/Copy/Download…) live in the navbar on
   // desktop, but move to the drawer's "Actions" section on mobile. carino-navbar
   // .js parks them (with the ☰) in the navbar; this relocates just the actions.
-  const mqMobile = window.matchMedia("(max-width: 860px)");
+  const mqMobile = window.matchMedia("(max-width: 900px)");
   function syncNavActions() {
     const acts = document.getElementById("navActions");
     if (!acts) return;
@@ -1136,7 +1049,7 @@ network:
   }
   // Run after the shared navbar has assembled itself (deferred script → on load).
   window.addEventListener("load", syncNavActions);
-  mqMobile.addEventListener("change", () => { syncNavActions(); toggleSidebar(false); });
+  mqMobile.addEventListener("change", syncNavActions);
 
   // ---- example scenarios -----------------------------------------------
   // Each maps a netplan-examples-style scenario onto the builder's own state
@@ -1630,11 +1543,40 @@ network:
   }
 
   function toggleEval() {
-    document.getElementById("evalOverlay").classList.toggle("open");
+    const ov = document.getElementById("evalOverlay");
+    ov.hidden = !ov.hidden;
   }
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape") document.getElementById("evalOverlay").classList.remove("open");
+    if (e.key === "Escape") document.getElementById("evalOverlay").hidden = true;
   });
+
+  // ---- open an existing netplan file ------------------------------------
+  // Read locally (FileReader) into the editor on the netplan backend, then
+  // validated like anything typed there. Drop on the zone or anywhere.
+  function openNetplanFile(file) {
+    if (!file) return;
+    file.text().then(text => {
+      setBackend("netplan");
+      editor.setValue(text);
+      validateYaml();
+    });
+  }
+  (function wireOpen() {
+    const zone = document.getElementById("openZone");
+    const input = document.getElementById("openFile");
+    zone.addEventListener("click", () => input.click());
+    zone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+    input.addEventListener("change", () => { openNetplanFile(input.files[0]); input.value = ""; });
+    ["dragenter", "dragover"].forEach(ev => document.addEventListener(ev, e => {
+      if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { e.preventDefault(); zone.classList.add("dragover"); }
+    }));
+    ["dragleave", "drop"].forEach(ev => document.addEventListener(ev, () => zone.classList.remove("dragover")));
+    document.addEventListener("drop", e => {
+      if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      openNetplanFile(e.dataTransfer.files[0]);
+    });
+  })();
 
   // Live DHCP-vs-static analysis whenever the document changes (lightly debounced).
   // Keep hand edits so switching file tabs doesn't discard them. The alert now
@@ -1764,5 +1706,6 @@ async function encodeShareFragment(json) {
 <script src="carino-lang.js" defer></script>
 <script src="i18n.js" defer></script>
 <script src="carino-diag.js" defer></script>
+<script src="carino-ui.js" defer></script>
 </body>
 </html>
