@@ -1412,7 +1412,7 @@ network:
         const d4 = cfg.dhcp4 === true, d6 = cfg.dhcp6 === true;
         if (hasAddr && (d4 || d6)) {
           const which = [d4 && "DHCPv4", d6 && "DHCPv6"].filter(Boolean).join(" + ");
-          hits.push(name + ": " + which + " + static " + cfg.addresses.join(", "));
+          hits.push(name + ": " + which + " + " + tx("static") + " " + cfg.addresses.join(", "));
         }
       }
     }
@@ -1428,10 +1428,13 @@ network:
       const staticV4 = hasAddr && !addrV6 && fam4, staticV6 = hasAddr && addrV6 && fam6;
       const d4 = fam4 && it.dhcp4, d6 = fam6 && it.dhcp6;
       const which = [staticV4 && d4 && "DHCPv4", staticV6 && d6 && "DHCPv6"].filter(Boolean).join(" + ");
-      if (which) hits.push((it.name || "iface") + ": " + which + " + static " + it.addr);
+      if (which) hits.push((it.name || "iface") + ": " + which + " + " + tx("static") + " " + it.addr);
     });
     return hits;
   }
+
+  // i18n.js is deferred: until it has loaded, t() does not exist yet.
+  const tx = (s) => (typeof t === "function" ? t(s) : s);
 
   function analyzeConfig() {
     const dhcpHits = currentBackend === "netplan" ? netplanYamlHits() : ifaceModelHits();
@@ -1439,26 +1442,30 @@ network:
     let html = "";
     if (dhcpHits && dhcpHits.length) {
       html +=
-        "&#9888; <b>DHCP and a static address on the same interface</b><br>" +
+        "&#9888; <b>" + tx("DHCP and a static address on the same interface") + "</b><br>" +
         dhcpHits.map(h => "&bull; " + escHtml(h)).join("<br>") +
-        "<br><br>This is valid, but all three backends apply <b>both</b>: the interface keeps the " +
+        "<br><br>" + tx("This is valid, but all three backends apply <b>both</b>: the interface keeps the " +
         "static address <i>and</i> accepts the DHCP lease, so it ends up multi-homed. Each source can " +
         "install a <b>default route</b>, and the competing route metrics decide egress non-deterministically. " +
         "Use it only for intentional multi-addressing. Otherwise turn the matching DHCP off " +
         "(netplan <code>dhcp4: false</code>, networkd <code>DHCP=no</code>, NM <code>method=manual</code>) " +
-        "or drop the static address and let DHCP manage it.";
+        "or drop the static address and let DHCP manage it.");
     }
     if (rt.multihomed) {
       if (html) html += "<hr class='warn-sep'>";
       html +=
-        "&#8505;&#65039; <b>Multi-homed — source-based routing added</b><br>" +
-        "Two or more ports have a static gateway" + (rt.shared ? " on the <b>same subnet</b>" : "") +
-        ", so one routing table would send every reply out whichever port owns the default route — " +
-        "an asymmetric path that reverse-path filtering drops (the classic “ping works one way”). " +
-        "Each port now gets its <b>own routing table</b> plus a <code>from &lt;ip&gt; table N</code> rule, " +
-        "so a reply always leaves the port its request arrived on." +
-        (rt.shared ? " Because the ports share a subnet, the output also includes the recommended " +
-          "<code>rp_filter=2</code> / <code>arp_ignore</code> / <code>arp_announce</code> sysctls." : "");
+        "&#8505;&#65039; <b>" + tx("Multi-homed — source-based routing added") + "</b><br>" +
+        (rt.shared
+          ? tx("Two or more ports have a static gateway on the <b>same subnet</b>, so one routing table would send every reply out whichever port owns the default route — " +
+            "an asymmetric path that reverse-path filtering drops (the classic “ping works one way”). " +
+            "Each port now gets its <b>own routing table</b> plus a <code>from &lt;ip&gt; table N</code> rule, " +
+            "so a reply always leaves the port its request arrived on.")
+          : tx("Two or more ports have a static gateway, so one routing table would send every reply out whichever port owns the default route — " +
+            "an asymmetric path that reverse-path filtering drops (the classic “ping works one way”). " +
+            "Each port now gets its <b>own routing table</b> plus a <code>from &lt;ip&gt; table N</code> rule, " +
+            "so a reply always leaves the port its request arrived on.")) +
+        (rt.shared ? " " + tx("Because the ports share a subnet, the output also includes the recommended " +
+          "<code>rp_filter=2</code> / <code>arp_ignore</code> / <code>arp_announce</code> sysctls.") : "");
     }
     if (!html) { warnBox.style.display = "none"; return; }
     warnBox.style.display = "block";
@@ -1588,6 +1595,9 @@ network:
     clearTimeout(analyzeTimer);
     analyzeTimer = setTimeout(analyzeConfig, 120);
   });
+  // Re-word an open warning when the visitor switches language.
+  // Deferred so it runs after i18n.js has switched the locale.
+  window.addEventListener("carino:langchange", () => setTimeout(analyzeConfig, 0));
 
   // ---- inbound URL hydration (topology → netplan bridge) ----------------
   // A link like https://netplan.carino.systems/#~<deflate-b64url> (or legacy
