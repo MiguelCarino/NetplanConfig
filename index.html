@@ -365,9 +365,6 @@
     .cm-s-material-darker .cm-comment,
     .cm-s-material-darker .CodeMirror-linenumber { color: var(--text-muted); }
 
-    /* the hero mark in both colourings; the theme picks one */
-    .mark.mk-color, :root[data-carino-theme="color"] .mark.mk-gold { display: none; }
-    :root[data-carino-theme="color"] .mark.mk-color { display: block; }
   </style>
   <!-- Colourful theme + the switch; nothing applies until data-carino-theme="color". -->
   <link rel="stylesheet" href="carino-theme.css">
@@ -457,8 +454,6 @@
 <div class="layout ws" role="main">
   <aside class="modules-section ws-rail" aria-label="Controls">
     <div class="short-hero rail-head">
-      <img class="mark mk-gold" src="logo.svg" alt="" width="32" height="32">
-      <img class="mark mk-color" src="logo-color.svg" alt="" width="32" height="32">
       <div><h1>Netplan Configurator</h1><p class="sh-lede" data-i18n>Build Linux network configs for netplan, systemd-networkd or NetworkManager.</p></div>
     </div>
 
